@@ -1,0 +1,563 @@
+:root {
+    --bg-color: #F2F2F2;
+    --zinc-50: #FAFAFA;
+    --zinc-100: #F4F4F5;
+    --zinc-200: #E4E4E7;
+    --zinc-300: #D4D4D8;
+    --zinc-600: #52525B;
+    --zinc-800: #27272A;
+    --ink: #09090B;
+    --text-primary: var(--ink);
+    --text-secondary: var(--zinc-600);
+    --border-color: var(--zinc-200);
+    
+    --success: #10B981;
+    --danger: #E11D48;
+    
+    /* Chart Aliases */
+    --success-green: var(--success);
+    --caution-red: var(--danger);
+    
+    --spacing: 40px;
+    --radius-sm: 8px;
+    --page-gutter: clamp(16px, 5vw, 72px);
+    --dashboard-max-width: 1400px;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* Typography Utilities */
+.display-header {
+    font-family: 'Instrument Sans', sans-serif;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+.emphasis-italic {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-weight: 400;
+}
+
+h1.display-header {
+    font-size: 28px;
+}
+
+h2.display-header {
+    font-size: 24px;
+}
+
+.subtitle {
+    font-family: 'Inter', sans-serif;
+    color: var(--zinc-600);
+    font-size: 14px;
+    margin-top: 4px;
+}
+
+/* Grid Layout */
+.grid-canvas {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: min(calc(100% - (var(--page-gutter) * 2)), var(--dashboard-max-width));
+    max-width: var(--dashboard-max-width);
+    margin: 0 auto;
+    padding: var(--spacing) 0; /* Vertical spacing only, horizontal handled by width/centering */
+    min-width: 0;
+}
+
+.grid-cell {
+    position: relative;
+    background: #FFFFFF;
+    border: 1px solid var(--zinc-200);
+    min-width: 0;
+}
+
+.header-section {
+    padding: 32px;
+    display: flex;
+    justify-content: center;
+    border-bottom: none; /* Let the next cell handle the top border or overlap */
+}
+
+.main-dashboard {
+    padding: 0; /* Removing padding to allow dashboard-grid to stretch */
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    min-height: 600px;
+    min-width: 0;
+}
+
+.dashboard-cell {
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.chart-full-width {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.border-left {
+    border-left: 1px solid var(--zinc-200);
+}
+
+/* Word Cloud Styles */
+.word-cloud-item {
+    cursor: pointer;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.word-cloud-item:hover {
+    opacity: 0.7;
+    stroke: var(--success);
+    stroke-width: 2px;
+}
+
+/* Tweet Stream Section */
+.tweet-stream-section {
+    border-top: none; /* overlaps with main-dashboard border */
+}
+
+.tweet-stream-container {
+    padding: 0 40px 40px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.empty-state {
+    padding: 40px;
+    text-align: center;
+    color: var(--zinc-600);
+    font-size: 14px;
+    background: var(--zinc-50);
+    border: 1px dashed var(--zinc-300);
+    border-radius: var(--radius-sm);
+}
+
+.tweet-card {
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    border: 1px solid var(--zinc-200);
+    border-radius: var(--radius-sm);
+    background: var(--zinc-50);
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.tweet-card:hover {
+    border-color: var(--zinc-300);
+    transform: translateY(-1px);
+    background: #FFFFFF;
+}
+
+.tweet-card.active {
+    border-color: #3B82F6;
+    background: #EFF6FF;
+    box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.1);
+}
+
+.tweet-card.sentiment-positive.active {
+    border-color: var(--success);
+    background: #ECFDF5;
+}
+
+.tweet-card.sentiment-negative.active {
+    border-color: var(--danger);
+    background: #FFF1F2;
+}
+
+.tweet-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: var(--zinc-600);
+}
+
+.tweet-card-header .time-cluster {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tweet-card-header i {
+    width: 14px;
+    height: 14px;
+    color: #1DA1F2; /* Twitter Blue */
+}
+
+.sentiment-badge {
+    border: 1px solid var(--zinc-200);
+    border-radius: var(--radius-sm);
+    padding: 4px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.sentiment-badge.sentiment-positive {
+    color: #047857;
+    background: #ECFDF5;
+    border-color: #A7F3D0;
+}
+
+.sentiment-badge.sentiment-negative {
+    color: #BE123C;
+    background: #FFF1F2;
+    border-color: #FECDD3;
+}
+
+.sentiment-badge.sentiment-neutral {
+    color: var(--zinc-600);
+    background: var(--zinc-100);
+}
+
+.tweet-card-content {
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--ink);
+    margin-bottom: 16px;
+}
+
+.tweet-card-metrics {
+    display: flex;
+    gap: 24px;
+    border-top: 1px solid var(--zinc-200);
+    padding-top: 12px;
+}
+
+.tweet-card-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tweet-card-metric .label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--zinc-600);
+}
+
+.tweet-card-metric .val {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+/* Intersection Dot Logic */
+.intersection-dot {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    background: var(--zinc-300);
+    border-radius: 50%;
+    z-index: 10;
+}
+
+.intersection-dot.br {
+    bottom: -3px;
+    right: -3px;
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.app-logo {
+    height: 60px;
+}
+
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 32px;
+    gap: 24px;
+    min-width: 0;
+}
+
+.chart-control-panel {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: 100%;
+}
+
+.selector-container {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.control-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--zinc-600);
+}
+
+.legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--zinc-600);
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.dot.positive { background-color: var(--success); }
+.dot.negative { background-color: var(--danger); }
+.dot.neutral { background-color: var(--zinc-300); }
+
+.chart-container {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    height: 500px;
+    position: relative;
+    overflow: hidden;
+}
+
+.chart-engine-surface {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    height: 100%;
+    overflow: hidden;
+}
+
+.chart-engine-surface canvas,
+.chart-engine-surface svg,
+.chart-engine-surface .highcharts-container {
+    max-width: 100%;
+}
+
+.chart-engine-surface[hidden] {
+    display: none;
+}
+
+/* Tooltip Styles */
+.tooltip {
+    position: absolute;
+    background: #FFFFFF;
+    border: 1px solid var(--zinc-200);
+    border-radius: var(--radius-sm);
+    padding: 20px;
+    width: 320px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 100;
+    font-family: 'Inter', sans-serif;
+}
+
+.tooltip.visible {
+    opacity: 1;
+}
+
+.tooltip-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--zinc-600);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.tooltip-content {
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--ink);
+    margin-bottom: 20px;
+    font-weight: 400;
+}
+
+.tooltip-metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--zinc-100);
+}
+
+.metric-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--zinc-600);
+    margin-bottom: 4px;
+}
+
+.metric-value {
+    font-size: 18px;
+    font-weight: 700;
+    font-family: 'Instrument Sans', sans-serif;
+}
+
+.value-positive { color: var(--success); }
+.value-negative { color: var(--danger); }
+.value-neutral { color: var(--zinc-600); }
+
+.tooltip.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.tooltip-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.tooltip-header svg {
+    width: 14px;
+    height: 14px;
+    color: #1DA1F2; /* Twitter Blue */
+}
+
+.tooltip-content {
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+    font-weight: 400;
+}
+
+.tooltip-metrics {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.metric {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.metric-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.metric-value {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.value-positive { color: var(--success-green); }
+.value-negative { color: var(--caution-red); }
+.value-neutral { color: var(--text-primary); }
+
+.tooltip-footer {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* Selector Styles */
+.stock-select {
+    appearance: none;
+    background-color: #FFFFFF;
+    border: 1px solid var(--zinc-200);
+    border-radius: var(--radius-sm);
+    padding: 8px 32px 8px 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--zinc-800);
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2352525B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+.stock-select:hover {
+    border-color: var(--zinc-300);
+    background-color: var(--zinc-50);
+}
+
+.stock-select:focus {
+    border-color: var(--ink);
+    box-shadow: 0 0 0 2px rgba(9, 9, 11, 0.05);
+}
+
+@media (max-width: 900px) {
+    .chart-header {
+        flex-direction: column;
+    }
+
+    .chart-control-panel {
+        justify-content: flex-start;
+        width: 100%;
+    }
+
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .border-left {
+        border-left: none;
+        border-top: 1px solid var(--zinc-200);
+    }
+}
