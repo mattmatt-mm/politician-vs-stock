@@ -97,13 +97,20 @@
                             <h2 class="display-header">Search <span class="emphasis-italic">Cloud</span></h2>
                             <p class="subtitle">Click a keyword to pivot the sector chart</p>
                         </div>
+                        <div class="selector-container">
+                            <label class="control-label" for="cloud-mode-selector">Mode</label>
+                            <select id="cloud-mode-selector" class="stock-select">
+                                <option value="keywords" selected>Keywords</option>
+                                <option value="topics">Topics</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="chart-container" id="word-cloud-container" style="flex: 1; height: 400px;"></div>
                 </div>
 
                 <!-- Tweet Stream Area -->
                 <div class="dashboard-cell border-left" style="padding: 0;">
-                    <div class="chart-header" style="margin-bottom: 24px; padding: 40px 40px 0 40px;">
+                    <div class="chart-header" style="margin-bottom: 8px; padding: 40px 40px 0 40px;">
                         <div>
                             <h2 class="display-header">Related <span class="emphasis-italic">Intelligence</span></h2>
                             <p class="subtitle" id="tweet-stream-subtitle">Select a keyword to view underlying tweet catalysts alongside daily S&P 500 performance.</p>
@@ -143,8 +150,8 @@
                     </div>
                 </div>
 
-    <script src="wordCloud.js"></script>
     <script src="script.js"></script>
+    <script src="wordCloud.js"></script>
     <script>
         lucide.createIcons();
     </script>

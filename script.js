@@ -13,6 +13,29 @@ const MARKET_KEYWORDS = {
     ]
 };
 
+const TOPIC_DEFINITIONS = {
+    'War & Defense': {
+        keywords: ['war', 'military', 'defense', 'nato', 'missile', 'strike', 'conflict', 'russia', 'china', 'raytheon', 'lockheed', 'pentagon'],
+        color: '#E11D48' // Red-ish for intensity
+    },
+    'Tariffs & Trade': {
+        keywords: ['tariff', 'tariffs', 'tax', 'trade war', 'trade', 'sanctions', 'economy', 'manufacturing', 'protectionism', 'duties'],
+        color: '#D97706' // Amber for economic caution
+    },
+    'Tech & AI': {
+        keywords: ['nvidia', 'nvda', 'ai', 'chip', 'semiconductor', 'palantir', 'pltr', 'tech', 'innovation', 'apple', 'microsoft', 'google'],
+        color: '#2563EB' // Blue for tech
+    },
+    'Immigration': {
+        keywords: ['border', 'ice', 'migrant', 'immigration', 'wall', 'secure', 'deportation', 'asylum'],
+        color: '#059669' // Green for land/border
+    },
+    'Politics': {
+        keywords: ['biden', 'democrats', 'republican', 'election', 'judge', 'pardon', 'victory', 'crooked', 'fake news'],
+        color: '#7C3AED' // Purple for politics
+    }
+};
+
 const SENTIMENT_TERMS = {
     positive: [
         'all time high', 'all-time high', 'record high', 'record highs',
@@ -739,9 +762,9 @@ class ReflexChart {
                 panKey: null,
                 spacing: [8, 8, 8, 8],
                 zooming: {
-                    type: undefined,
-                    mouseWheel: { enabled: false },
-                    pinchType: undefined
+                    type: 'x',
+                    mouseWheel: { enabled: true },
+                    singleTouch: true
                 }
             },
             accessibility: { enabled: true },
@@ -762,6 +785,16 @@ class ReflexChart {
                 crosshair: true,
                 lineColor: '#E4E4E7',
                 tickColor: '#E4E4E7',
+                events: {
+                    afterSetExtremes: (e) => {
+                        if (!e.trigger) return; // Prevent infinite loops from programmatic sets
+                        const filteredEvents = this.currentEvents.filter(event => {
+                            const time = event.date.getTime();
+                            return time >= e.min && time <= e.max;
+                        });
+                        this.populateTweetStream(this.currentTicker, filteredEvents);
+                    }
+                },
                 plotLines: visibleEvents.map(event => ({
                     id: `tweet-line-${event.id}`,
                     value: event.date.getTime(),
@@ -867,9 +900,9 @@ class ReflexChart {
                 panKey: null,
                 spacing: [8, 8, 8, 8],
                 zooming: {
-                    type: undefined,
-                    mouseWheel: { enabled: false },
-                    pinchType: undefined
+                    type: 'x',
+                    mouseWheel: { enabled: true },
+                    singleTouch: true
                 }
             },
             accessibility: { enabled: true },
@@ -890,6 +923,16 @@ class ReflexChart {
                 crosshair: true,
                 lineColor: '#E4E4E7',
                 tickColor: '#E4E4E7',
+                events: {
+                    afterSetExtremes: (e) => {
+                        if (!e.trigger) return;
+                        const filteredEvents = this.currentEvents.filter(event => {
+                            const time = event.date.getTime();
+                            return time >= e.min && time <= e.max;
+                        });
+                        this.populateTweetStream(this.currentTicker, filteredEvents);
+                    }
+                },
                 plotLines: visibleEvents.map(event => ({
                     id: `tweet-line-${event.id}`,
                     value: event.date.getTime(),
@@ -1137,6 +1180,25 @@ class ReflexChart {
         if (window.lucide) {
             lucide.createIcons();
         }
+    }
+
+    filterEventsByTopic(topicName) {
+        const topic = TOPIC_DEFINITIONS[topicName];
+        if (!topic || !this.currentEvents) return;
+
+        const keywords = topic.keywords;
+        const filteredEvents = this.currentEvents.filter(event => {
+            const content = event.text.toLowerCase();
+            return keywords.some(keyword => content.includes(keyword));
+        });
+
+        const displayTicker = this.displayTickerLabel(this.currentTicker);
+        const subtitle = document.getElementById('tweet-stream-subtitle');
+        if (subtitle) {
+            subtitle.innerHTML = `<span style="color: ${topic.color}; font-weight: 700;">${topicName}</span>: ${filteredEvents.length} posts found in the ${displayTicker} range.`;
+        }
+
+        this.populateTweetStream(this.currentTicker, filteredEvents);
     }
 
     escapeHtml(value) {
