@@ -52,8 +52,22 @@
                             <div class="selector-container">
                                 <label class="control-label" for="chart-engine-selector">Chart Engine</label>
                                 <select id="chart-engine-selector" class="stock-select">
-                                    <option value="scichart" selected>SciChart</option>
-                                    <option value="highcharts">Highcharts Stock</option>
+                                    <option value="scichart">SciChart</option>
+                                    <option value="highcharts" selected>Highcharts Stock</option>
+                                </select>
+                            </div>
+                            <div class="selector-container">
+                                <label class="control-label" for="year-selector">Analysis Year</label>
+                                <select id="year-selector" class="stock-select">
+                                    <option value="2026">2026</option>
+                                    <option value="2025">2025</option>
+                                    <option value="2024" selected>2024</option>
+                                    <option value="2023">2023</option>
+                                    <option value="2022">2022</option>
+                                    <option value="2021">2021</option>
+                                    <option value="2020">2020</option>
+                                    <option value="2019">2019</option>
+                                    <option value="all">All Available</option>
                                 </select>
                             </div>
                             <div class="legend">
@@ -108,7 +122,7 @@
 
                 <div class="tooltip" id="chart-tooltip">
                     <div class="tooltip-header">
-                        <i data-lucide="twitter"></i>
+                        <i data-lucide="message-square"></i>
                         <span id="tooltip-time">Time</span>
                     </div>
                     <div class="tooltip-content" id="tooltip-tweet">

@@ -36,15 +36,16 @@ const SENTIMENT_META = {
 };
 
 const TWEET_YEAR_MIN = 2019;
-const TWEET_YEAR_MAX = 2025;
+const TWEET_YEAR_MAX = 2026;
 
 class ReflexChart {
     constructor(containerId) {
         this.containerId = containerId;
         this.tooltip = document.getElementById('chart-tooltip');
         this.tweets = [];
-        this.chartEngine = 'scichart';
+        this.chartEngine = 'highcharts';
         this.currentTicker = 'SP500';
+        this.currentYear = '2024';
         this.currentStockData = [];
         this.currentEvents = [];
         this.currentWindowMs = null;
@@ -147,7 +148,8 @@ class ReflexChart {
                 .filter(tweet => {
                     if (!tweet.date || Number.isNaN(tweet.date.getTime()) || tweet.deleted) return false;
                     const year = tweet.date.getFullYear();
-                    return year >= TWEET_YEAR_MIN && year <= TWEET_YEAR_MAX;
+                    const yearMatch = this.currentYear === 'all' || year === parseInt(this.currentYear, 10);
+                    return yearMatch && year >= TWEET_YEAR_MIN && year <= TWEET_YEAR_MAX;
                 });
 
             return this.tweets;
@@ -164,13 +166,18 @@ class ReflexChart {
             .trim();
     }
 
-    async update(tickerSymbol, engine = this.chartEngine) {
+    async update(tickerSymbol, engine = this.chartEngine, year = this.currentYear) {
         const normalizedTicker = this.normalizeTicker(tickerSymbol);
         this.currentTicker = normalizedTicker;
         this.chartEngine = engine;
+        this.currentYear = year;
+        
         this.syncTickerSelector(normalizedTicker);
+        this.syncYearSelector(year);
 
         try {
+            // Reset cache when changing year to ensure fresh filtering
+            this.tweets = []; 
             await this.loadTweets();
             this.currentStockData = await this.loadStockData(normalizedTicker);
             this.currentEvents = this.prepareTweetEvents(normalizedTicker, this.currentStockData);
@@ -203,6 +210,12 @@ class ReflexChart {
         if (hasOption) selector.value = tickerSymbol;
     }
 
+    syncYearSelector(year) {
+        const selector = document.getElementById('year-selector');
+        if (!selector) return;
+        selector.value = year;
+    }
+
     async setChartEngine(engine) {
         if (!['scichart', 'highcharts'].includes(engine)) return;
         this.chartEngine = engine;
@@ -224,7 +237,11 @@ class ReflexChart {
                     low: parseFloat(d.low),
                     close: parseFloat(d.close)
                 }))
-                .filter(d => this.isValidCandle(d) && d.date.getFullYear() >= 2025)
+                .filter(d => {
+                    const year = d.date.getFullYear();
+                    const yearMatch = this.currentYear === 'all' || year === parseInt(this.currentYear, 10);
+                    return this.isValidCandle(d) && yearMatch && year >= 2019;
+                })
                 .sort((a, b) => a.date - b.date);
         }
 
@@ -238,7 +255,11 @@ class ReflexChart {
                 low: Number(d.low),
                 close: Number(d.close)
             }))
-            .filter(d => this.isValidCandle(d))
+            .filter(d => {
+                const year = d.date.getFullYear();
+                const yearMatch = this.currentYear === 'all' || year === parseInt(this.currentYear, 10);
+                return this.isValidCandle(d) && yearMatch;
+            })
             .sort((a, b) => a.date - b.date);
     }
 
@@ -260,7 +281,11 @@ class ReflexChart {
                     chartType: 'line'
                 };
             })
-            .filter(d => d.date && !Number.isNaN(d.date.getTime()) && Number.isFinite(d.close))
+            .filter(d => {
+                const year = d.date.getFullYear();
+                const yearMatch = this.currentYear === 'all' || year === parseInt(this.currentYear, 10);
+                return d.date && !Number.isNaN(d.date.getTime()) && Number.isFinite(d.close) && yearMatch;
+            })
             .sort((a, b) => a.date - b.date);
     }
 
@@ -386,7 +411,7 @@ class ReflexChart {
             .map(tweet => this.enrichTweet(tweet, ticker, stockData))
             .sort((a, b) => a.date - b.date);
 
-        return events.slice(0, 150);
+        return events.slice(-500); // Take the latest 500 for the selected year
     }
 
     enrichTweet(tweet, ticker, stockData) {
@@ -474,13 +499,12 @@ class ReflexChart {
         title.innerHTML = `${displayTicker} <span class="emphasis-italic">Reflex Analysis</span>`;
 
         const timeframe = this.isSp500Ticker(tickerSymbol)
-            ? 'daily broken-line index'
+            ? 'daily index'
             : tickerSymbol === 'NVDA' ? '60-minute' : '1-minute';
         const engineName = this.chartEngine === 'highcharts' ? 'Highcharts Stock' : 'SciChart.js';
-        const caveat = this.isSp500Ticker(tickerSymbol)
-            ? ' Line breaks indicate missing calendar sessions in sp500_index.csv.'
-            : '';
-        subtitle.textContent = `${timeframe} candles with Trump tweet timestamps. Drag to pan time; wheel zoom is disabled. Engine: ${engineName}.${caveat}`;
+        const yearLabel = this.currentYear === 'all' ? 'All Time' : this.currentYear;
+        
+        subtitle.textContent = `${yearLabel} ${timeframe} candles with Trump tweet timestamps. Drag to pan time. Engine: ${engineName}.`;
     }
 
     async renderActiveChart() {
@@ -510,7 +534,13 @@ class ReflexChart {
     }
 
     renderSciChart(ticker, data, events) {
-        if (!this.sciChartSurface || !data.length) return;
+        if (!this.sciChartSurface) return;
+        
+        if (!data.length) {
+            this.sciChartSurface.renderableSeries.clear();
+            this.sciChartSurface.annotations.clear();
+            return;
+        }
 
         if (this.isSp500Ticker(ticker)) {
             this.renderSciChartLine(ticker, data, events);
@@ -661,7 +691,7 @@ class ReflexChart {
         const defaultSpan = this.defaultWindowMs(data) / 1000;
 
         if (dataSpan > defaultSpan) {
-            this.xAxis.visibleRange = new NumberRange(max - defaultSpan, max);
+            this.xAxis.visibleRange = new SciChart.NumberRange(max - defaultSpan, max);
             this.currentWindowMs = defaultSpan * 1000;
         } else {
             this.sciChartSurface.zoomExtents();
@@ -671,10 +701,12 @@ class ReflexChart {
 
     renderHighcharts(ticker, data, events) {
         const highchartsNode = document.getElementById(this.highchartsContainerId);
-        if (!window.Highcharts || !highchartsNode || !data.length) {
-            if (highchartsNode) {
-                highchartsNode.innerHTML = '<div class="empty-state">Highcharts Stock failed to load.</div>';
-            }
+        if (!window.Highcharts || !highchartsNode) return;
+
+        if (!data.length) {
+            highchartsNode.innerHTML = `<div class="empty-state">No market data found for ${this.displayTickerLabel(ticker)} in ${this.currentYear}.</div>`;
+            if (this.highChart) this.highChart.destroy();
+            this.highChart = null;
             return;
         }
 
@@ -1073,7 +1105,7 @@ class ReflexChart {
             card.innerHTML = `
                 <div class="tweet-card-header">
                     <div class="time-cluster">
-                        <i data-lucide="twitter"></i>
+                        <i data-lucide="message-square"></i>
                         <span>${timeStr}</span>
                     </div>
                     <span class="sentiment-badge ${sentimentClass}">${event.sentiment.label}</span>
@@ -1134,6 +1166,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (engineSelector) {
         engineSelector.addEventListener('change', event => {
             window.reflexChart.setChartEngine(event.target.value);
+        });
+    }
+
+    const yearSelector = document.getElementById('year-selector');
+    if (yearSelector) {
+        yearSelector.addEventListener('change', event => {
+            window.reflexChart.update(window.reflexChart.currentTicker, window.reflexChart.chartEngine, event.target.value);
         });
     }
 

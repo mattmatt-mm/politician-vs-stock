@@ -83,7 +83,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     .on("click", function(event, d) {
                         // Trigger ReflexChart update
                         if (window.reflexChart && d.originalData.related_stock) {
-                            window.reflexChart.update(d.originalData.related_stock, 'stock_data_mock.json', d.originalData.events);
+                            window.reflexChart.update(d.originalData.related_stock);
                             
                             // Visual feedback
                             svg.selectAll("text")
