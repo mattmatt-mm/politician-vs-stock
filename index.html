@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trump Market Reflex - Detail View</title>
+    <!-- Google Fonts: Instrument Sans & Instrument Serif -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,700;1,400&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <!-- D3.js (Keep for Word Cloud) -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-cloud@1.2.5/build/d3.layout.cloud.min.js"></script>
+    <!-- Highcharts Stock (comparison engine for candlestick charts) -->
+    <script src="https://code.highcharts.com/stock/highstock.js"></script>
+    <script src="https://code.highcharts.com/modules/accessibility.js"></script>
+    <!-- SciChart.js (High Performance WebGL Charts) -->
+    <script src="https://cdn.jsdelivr.net/npm/scichart/index.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+    <div class="grid-canvas">
+        <!-- Top Navigation / Brand -->
+        <header class="header-section grid-cell">
+            <div class="logo-container">
+                <img src="app_logo.svg" alt="Logo" class="app-logo" onerror="this.style.display='none'">
+            </div>
+            <div class="intersection-dot br"></div>
+        </header>
+
+        <!-- Main Dashboard Area (Chart Section) -->
+        <main class="main-dashboard grid-cell" style="border-bottom: none;">
+            <div class="chart-full-width">
+                <!-- Candlestick Section -->
+                <div class="dashboard-cell" style="padding-bottom: 20px;">
+                    <div class="chart-header">
+                        <div>
+                            <h2 class="display-header" id="dynamic-chart-title">Trading Impact <span class="emphasis-italic">Analysis</span></h2>
+                            <p class="subtitle" id="dynamic-chart-subtitle">1-Minute SPY ETF Chart ±30m around tweet timestamps</p>
+                        </div>
+                        <div class="chart-control-panel">
+                            <div class="selector-container">
+                                <label class="control-label" for="stock-selector">Ticker</label>
+                                <select id="stock-selector" class="stock-select">
+                                    <option value="SP500" selected>S&P 500 Index</option>
+                                    <option value="NVDA">NVDA (NVIDIA)</option>
+                                </select>
+                            </div>
+                            <div class="selector-container">
+                                <label class="control-label" for="chart-engine-selector">Chart Engine</label>
+                                <select id="chart-engine-selector" class="stock-select">
+                                    <option value="scichart">SciChart</option>
+                                    <option value="highcharts" selected>Highcharts Stock</option>
+                                </select>
+                            </div>
+                            <div class="selector-container">
+                                <label class="control-label" for="year-selector">Analysis Year</label>
+                                <select id="year-selector" class="stock-select">
+                                    <option value="2026">2026</option>
+                                    <option value="2025">2025</option>
+                                    <option value="2024" selected>2024</option>
+                                    <option value="2023">2023</option>
+                                    <option value="2022">2022</option>
+                                    <option value="2021">2021</option>
+                                    <option value="2020">2020</option>
+                                    <option value="2019">2019</option>
+                                    <option value="all">All Available</option>
+                                </select>
+                            </div>
+                            <div class="legend">
+                                <div class="legend-item"><span class="dot positive"></span> Positive Tweet</div>
+                                <div class="legend-item"><span class="dot negative"></span> Negative Tweet</div>
+                                <div class="legend-item"><span class="dot neutral"></span> Neutral/Media</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- The Chart -->
+                    <div class="chart-container" id="candlestick-chart" style="flex: 1; height: 500px;">
+                        <div id="candlestick-chart-scichart" class="chart-engine-surface"></div>
+                        <div id="candlestick-chart-highcharts" class="chart-engine-surface" hidden></div>
+                    </div>
+                </div>
+            </div>
+            <div class="intersection-dot br"></div>
+        </main>
+
+        <!-- Lower Dashboard Area (Side by side) -->
+        <section class="lower-dashboard-grid grid-cell tweet-stream-section">
+            <div class="dashboard-grid">
+                <!-- Word Cloud Section -->
+                <div class="dashboard-cell">
+                    <div class="chart-header">
+                        <div>
+                            <h2 class="display-header">Search <span class="emphasis-italic">Cloud</span></h2>
+                            <p class="subtitle">Click a keyword to pivot the sector chart</p>
+                        </div>
+                        <div class="selector-container">
+                            <label class="control-label" for="cloud-mode-selector">Mode</label>
+                            <select id="cloud-mode-selector" class="stock-select">
+                                <option value="keywords" selected>Keywords</option>
+                                <option value="topics">Topics</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="chart-container" id="word-cloud-container" style="flex: 1; height: 400px;"></div>
+                </div>
+
+                <!-- Tweet Stream Area -->
+                <div class="dashboard-cell border-left" style="padding: 0;">
+                    <div class="chart-header" style="margin-bottom: 8px; padding: 40px 40px 0 40px;">
+                        <div>
+                            <h2 class="display-header">Related <span class="emphasis-italic">Intelligence</span></h2>
+                            <p class="subtitle" id="tweet-stream-subtitle">Select a keyword to view underlying tweet catalysts alongside daily S&P 500 performance.</p>
+                        </div>
+                    </div>
+                    
+                    <div id="tweet-stream-container" class="tweet-stream-container" style="flex: 1;">
+                        <div class="empty-state">No keyword selected</div>
+                    </div>
+                </div>
+            </div>
+            <div class="intersection-dot br"></div>
+        </section>
+
+    </div>
+
+                <div class="tooltip" id="chart-tooltip">
+                    <div class="tooltip-header">
+                        <i data-lucide="message-square"></i>
+                        <span id="tooltip-time">Time</span>
+                    </div>
+                    <div class="tooltip-content" id="tooltip-tweet">
+                        "Tweet content..."
+                    </div>
+                    <div class="tooltip-metrics">
+                        <div class="metric">
+                            <span class="metric-label">Sentiment</span>
+                            <span class="metric-value" id="tooltip-sentiment">0.0</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Abnormal Return</span>
+                            <span class="metric-value" id="tooltip-return">0.0%</span>
+                        </div>
+                    </div>
+                    <div class="tooltip-footer" id="tooltip-context">
+                        Demonstrates hypothesis: ...
+                    </div>
+                </div>
+
+    <script src="script.js"></script>
+    <script src="wordCloud.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>
