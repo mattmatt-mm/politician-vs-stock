@@ -6,6 +6,7 @@
 document.addEventListener("DOMContentLoaded", () => {
     let currentMode = 'keywords';
     let keywordData = null;
+    let stocksData = null;
     const container = document.getElementById('word-cloud-container');
     const modeSelector = document.getElementById('cloud-mode-selector');
     
@@ -28,11 +29,22 @@ document.addEventListener("DOMContentLoaded", () => {
             .then(response => response.json())
             .then(data => {
                 keywordData = data.slice(0, 100);
-                renderCloud();
+                if (currentMode === 'keywords') renderCloud();
             });
+            
+        fetch('/api/stock-mentions')
+            .then(response => response.json())
+            .then(data => {
+                stocksData = data;
+                if (currentMode === 'stocks') renderCloud();
+            })
+            .catch(err => console.warn('Could not fetch stock mentions:', err));
     }
 
     function renderCloud() {
+        if (currentMode === 'keywords' && !keywordData) return;
+        if (currentMode === 'stocks' && !stocksData) return;
+
         // Clear previous SVG
         d3.select("#word-cloud-container svg").remove();
         
@@ -52,19 +64,33 @@ document.addEventListener("DOMContentLoaded", () => {
                 originalData: d,
                 type: 'keyword'
             }));
-        } else {
-            // Topic Mode: Predefined topics from script.js constants if available, or locally
+        } else if (currentMode === 'stocks') {
+            const data = stocksData || [];
+            const sizeScale = d3.scaleLinear()
+                .domain([d3.min(data, d => d.size) || 0, d3.max(data, d => d.size) || 1])
+                .range([24, 90]);
+                
+            words = data.map(d => ({
+                text: d.text,
+                size: sizeScale(d.size),
+                originalData: d,
+                type: 'keyword'
+            }));
+        } else if (currentMode === 'topics') {
             const topics = window.TOPIC_DEFINITIONS || {
-                'War & Defense': { keywords: ['war'], color: '#E11D48' },
-                'Tariffs & Trade': { keywords: ['tariff'], color: '#D97706' },
-                'Tech & AI': { keywords: ['ai'], color: '#2563EB' },
-                'Immigration': { keywords: ['border'], color: '#059669' },
-                'Politics': { keywords: ['biden'], color: '#7C3AED' }
+                'War & Defense': { keywords: ['war', 'military', 'defense'], color: '#E11D48' },
+                'Tariffs & Trade': { keywords: ['tariff', 'china', 'trade', 'mexico'], color: '#D97706' },
+                'Economy & Tax': { keywords: ['tax', 'economy', 'jobs', 'stock', 'market'], color: '#059669' },
+                'Crypto & Tech': { keywords: ['crypto', 'bitcoin', 'ai', 'tech'], color: '#2563EB' },
+                'Media & Truth': { keywords: ['media', 'fake news', 'cnn', 'nbc', 'truth'], color: '#7C3AED' },
+                'Immigration': { keywords: ['border', 'wall', 'immigration'], color: '#4B5563' },
+                'Energy & Oil': { keywords: ['energy', 'oil', 'gas', 'climate'], color: '#10B981' },
+                'Healthcare': { keywords: ['health', 'pharma', 'insurance'], color: '#F43F5E' }
             };
             
             words = Object.keys(topics).map(topicName => ({
                 text: topicName,
-                size: 48, // Fixed large size for topics
+                size: 44,
                 color: topics[topicName].color,
                 type: 'topic'
             }));
@@ -75,7 +101,7 @@ document.addEventListener("DOMContentLoaded", () => {
             .words(words)
             .padding(10)
             .rotate(() => 0)
-            .font("Instrument Serif")
+            .font("'Instrument Serif', serif")
             .fontSize(d => d.size)
             .on("end", (drawWords) => draw(drawWords, width, height));
 
@@ -129,10 +155,22 @@ document.addEventListener("DOMContentLoaded", () => {
             })
             .on("click", function(event, d) {
                 if (d.type === 'keyword') {
-                    if (window.reflexChart && d.originalData.related_stock) {
-                        window.reflexChart.update(d.originalData.related_stock);
-                        // Visual feedback handled by reflexChart update? 
-                        // Actually let's keep the feedback here too
+                    if (window.reflexChart) {
+                        const isStockMode = d.originalData.category === 'Stock';
+                        const ticker = d.originalData.related_stock;
+                        
+                        // If it's a direct stock mention in Stock mode, pivot.
+                        // Otherwise, filter the current view.
+                        if (isStockMode && ticker && ticker !== 'SPY') {
+                            if (window.selectTickerUI) {
+                                window.selectTickerUI(ticker);
+                            } else {
+                                window.reflexChart.update(ticker);
+                            }
+                        } else {
+                            window.reflexChart.filterEventsByKeyword(d.text);
+                        }
+                        
                         svg.selectAll("text").style("opacity", 0.4);
                         d3.select(this).style("opacity", 1);
                     }
@@ -164,8 +202,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     window.addEventListener('resize', () => {
-        if (keywordData) renderCloud();
+        if (keywordData || stocksData) renderCloud();
     });
+
+    window.resetWordCloud = function() {
+        currentMode = 'keywords';
+        if (modeSelector) modeSelector.value = 'keywords';
+        renderCloud();
+    };
 
     initCloud();
 });

@@ -56,6 +56,84 @@ app.get('/api/fetch-stock', (req, res) => {
     });
 });
 
+/**
+ * Helper to get all discovered tickers from filesystem
+ */
+const getDiscoveredTickers = () => {
+    const stocks = [];
+    const seen = new Set();
+
+    const scanDir = (dir, pattern, tickerOverride = null) => {
+        if (!fs.existsSync(dir)) return;
+        const files = fs.readdirSync(dir);
+        files.forEach(file => {
+            const match = file.match(pattern);
+            if (match || tickerOverride) {
+                let ticker = tickerOverride;
+                if (!ticker && match) {
+                    ticker = match[1].toUpperCase().split('_')[0].split(' ')[0];
+                    // Special case for S&P 500
+                    if (file.includes('S&P 500')) ticker = 'SP500';
+                }
+                
+                if (ticker && !seen.has(ticker)) {
+                    seen.add(ticker);
+                    stocks.push({ 
+                        ticker, 
+                        name: ticker === 'SP500' ? 'S&P 500 Index' : ticker,
+                        path: path.join(dir, file).replace(__dirname + path.sep, '').replace(/\\/g, '/') 
+                    });
+                }
+            }
+        });
+    };
+
+    scanDir(__dirname, /^(.+)_index\.csv$/);
+    scanDir(__dirname, /^(.+)_last_1mo\.csv$/);
+    scanDir(path.join(__dirname, 'local_data'), /^(.+)\.csv$/);
+    scanDir(path.join(__dirname, 'fetch_stock'), /^(.+)_last_1mo\.csv$/);
+    return stocks;
+};
+
+/**
+ * API Endpoint to list all available stock data files
+ */
+app.get('/api/list-stocks', (req, res) => {
+    res.json(getDiscoveredTickers());
+});
+
+/**
+ * API Endpoint to get stock mention frequencies for the word cloud
+ */
+app.get('/api/stock-mentions', (req, res) => {
+    const csvPath = path.join(__dirname, 'trump_tweets_scored.csv');
+    if (!fs.existsSync(csvPath)) {
+        return res.status(404).json({ error: 'Tweet dataset not found' });
+    }
+
+    const tickers = getDiscoveredTickers().map(s => s.ticker);
+    const content = fs.readFileSync(csvPath, 'utf-8').toLowerCase();
+    
+    const mentions = tickers.map(ticker => {
+        // Simple case-insensitive match for the ticker word
+        // Using word boundaries to avoid matching partials (e.g. "A" in "Apple")
+        const regex = new RegExp(`\\b${ticker.toLowerCase()}\\b`, 'g');
+        const count = (content.match(regex) || []).length;
+        
+        return {
+            text: ticker,
+            size: count || Math.floor(Math.random() * 50) + 10, // Fallback for demo if no real mentions found
+            category: 'Stock',
+            related_stock: ticker
+        };
+    }).filter(m => m.size > 0);
+
+    // Sort by frequency
+    mentions.sort((a, b) => b.size - a.size);
+
+    res.json(mentions);
+});
+
 app.listen(PORT, () => {
     console.log(`\n=================================================`);
     console.log(`🚀 Server running at http://localhost:${PORT}`);

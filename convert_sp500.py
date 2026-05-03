@@ -40,8 +40,8 @@ def transform_sp500_data(input_file, output_file):
     print("Done!")
 
 if __name__ == "__main__":
-    input_path = 'unprocessed_data/S&P 500 Historical Data.csv'
-    output_path = 'sp500_index_new.csv' # Using a new name initially for safety
+    input_path = 'fetch_stock/S&P 500 Historical Data.csv'
+    output_path = 'sp500_index.csv'
     
     if os.path.exists(input_path):
         transform_sp500_data(input_path, output_path)

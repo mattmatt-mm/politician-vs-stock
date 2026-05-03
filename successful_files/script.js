@@ -58,8 +58,8 @@ const SENTIMENT_META = {
     neutral: { label: 'Neutral', color: '#A1A1AA', title: 'T' }
 };
 
-const TWEET_YEAR_MIN = 2024;
-const TWEET_YEAR_MAX = 2025;
+const TWEET_YEAR_MIN = 2019;
+const TWEET_YEAR_MAX = 2026;
 
 class ReflexChart {
     constructor(containerId) {
@@ -68,10 +68,9 @@ class ReflexChart {
         this.tweets = [];
         this.chartEngine = 'highcharts';
         this.currentTicker = 'SP500';
-        this.currentYear = '2025';
+        this.currentYear = '2024';
         this.currentStockData = [];
         this.currentEvents = [];
-        this.showVerticalLines = false;
         this.currentWindowMs = null;
 
         this.sciChartSurface = null;
@@ -96,7 +95,6 @@ class ReflexChart {
             const sciChartNode = document.createElement('div');
             sciChartNode.id = this.sciChartContainerId;
             sciChartNode.className = 'chart-engine-surface';
-            sciChartNode.hidden = true;
             this.container.appendChild(sciChartNode);
         }
 
@@ -104,6 +102,7 @@ class ReflexChart {
             const highchartsNode = document.createElement('div');
             highchartsNode.id = this.highchartsContainerId;
             highchartsNode.className = 'chart-engine-surface';
+            highchartsNode.hidden = true;
             this.container.appendChild(highchartsNode);
         }
     }
@@ -159,7 +158,7 @@ class ReflexChart {
         if (this.tweets.length > 0) return this.tweets;
 
         try {
-            const data = await d3.csv('trump_tweets_scored.csv?v=2019-2025');
+            const data = await d3.csv('trump_tweets_dataset.csv?v=2019-2025');
             this.tweets = data
                 .map(d => ({
                     id: d.id,
@@ -167,9 +166,7 @@ class ReflexChart {
                     text: this.cleanTweetText(d.text || ''),
                     platform: d.platform,
                     postUrl: d.post_url,
-                    deleted: String(d.deleted_flag).toLowerCase() === 'true',
-                    sentimentDirection: d.sentiment_direction || 'neutral',
-                    sentimentScore: parseFloat(d.sentiment_score) || 0
+                    deleted: String(d.deleted_flag).toLowerCase() === 'true'
                 }))
                 .filter(tweet => {
                     if (!tweet.date || Number.isNaN(tweet.date.getTime()) || tweet.deleted) return false;
@@ -230,12 +227,10 @@ class ReflexChart {
     }
 
     syncTickerSelector(tickerSymbol) {
-        const input = document.getElementById('stock-search-input');
-        if (!input) return;
-        // In the new combobox, we just update the input value.
-        // We can't easily find the 'name' here without access to availableStocks,
-        // so we just show the ticker or let the combobox logic handle it.
-        if (tickerSymbol) input.value = tickerSymbol;
+        const selector = document.getElementById('stock-selector');
+        if (!selector) return;
+        const hasOption = Array.from(selector.options).some(option => option.value === tickerSymbol);
+        if (hasOption) selector.value = tickerSymbol;
     }
 
     syncYearSelector(year) {
@@ -255,51 +250,27 @@ class ReflexChart {
             return this.loadSp500IndexData();
         }
 
-        const possiblePaths = [
-            `local_data/${tickerSymbol}_60min.csv`,
-            `fetch_stock/${tickerSymbol}_last_1mo.csv`,
-            `${tickerSymbol}_last_1mo.csv`,
-            `local_data/${tickerSymbol}.csv`,
-            `${tickerSymbol}.csv`
-        ];
-
-        for (const path of possiblePaths) {
-            try {
-                const checkRes = await fetch(path, { method: 'HEAD' });
-                if (checkRes.ok) {
-                    const rawData = await d3.csv(path);
-                    if (rawData && rawData.length > 0) {
-                        const parsedData = rawData
-                            .map(d => ({
-                                date: this.parseMarketDate(d.Date || d.date || d.datetime),
-                                open: parseFloat(d.Open || d.open),
-                                high: parseFloat(d.High || d.high),
-                                low: parseFloat(d.Low || d.low),
-                                close: parseFloat(d.Close || d.close)
-                            }))
-                            .filter(d => {
-                                if (!this.isValidCandle(d)) return false;
-                                const year = d.date.getFullYear();
-                                return this.currentYear === 'all' || year === parseInt(this.currentYear, 10);
-                            })
-                            .sort((a, b) => a.date - b.date);
-                        
-                        if (parsedData.length > 0) return parsedData;
-                    }
-                }
-            } catch (e) {
-                // Continue to next path
-            }
+        if (tickerSymbol === 'NVDA') {
+            const rawData = await d3.csv('NVDA_60min.csv');
+            return rawData
+                .map(d => ({
+                    date: this.parseMarketDate(d.datetime),
+                    open: parseFloat(d.open),
+                    high: parseFloat(d.high),
+                    low: parseFloat(d.low),
+                    close: parseFloat(d.close)
+                }))
+                .filter(d => {
+                    const year = d.date.getFullYear();
+                    const yearMatch = this.currentYear === 'all' || year === parseInt(this.currentYear, 10);
+                    return this.isValidCandle(d) && yearMatch && year >= 2019;
+                })
+                .sort((a, b) => a.date - b.date);
         }
 
-        console.log(`No local CSV found for ${tickerSymbol}, falling back to mock data.`);
-
-        // Fallback to mockLibrary
         const response = await fetch('stock_data_mock.json');
         const mockLibrary = await response.json();
-        const entry = mockLibrary[tickerSymbol] || mockLibrary.SP500 || mockLibrary.SPY;
-        
-        return entry.data
+        return (mockLibrary[tickerSymbol] || mockLibrary.SP500 || mockLibrary.SPY).data
             .map(d => ({
                 date: this.parseMarketDate(d.date),
                 open: Number(d.open),
@@ -467,11 +438,7 @@ class ReflexChart {
     }
 
     enrichTweet(tweet, ticker, stockData) {
-        const sentiment = {
-            direction: tweet.sentimentDirection,
-            label: SENTIMENT_META[tweet.sentimentDirection].label,
-            score: tweet.sentimentScore
-        };
+        const sentiment = this.classifySentiment(tweet.text, ticker);
         const reaction = this.calculatePostMove(tweet.date, stockData);
 
         return {
@@ -480,6 +447,34 @@ class ReflexChart {
             reaction,
             markerColor: SENTIMENT_META[sentiment.direction].color,
             markerTitle: SENTIMENT_META[sentiment.direction].title
+        };
+    }
+
+    classifySentiment(text, ticker) {
+        const content = text.toLowerCase();
+        let positiveScore = 0;
+        let negativeScore = 0;
+
+        SENTIMENT_TERMS.positive.forEach(term => {
+            if (content.includes(term)) positiveScore += term.length > 10 ? 2 : 1;
+        });
+
+        SENTIMENT_TERMS.negative.forEach(term => {
+            if (content.includes(term)) negativeScore += term.length > 10 ? 2 : 1;
+        });
+
+        if (this.isSp500Ticker(ticker) && content.includes('inflation is down')) positiveScore += 3;
+        if (content.includes('tariffs are working') || content.includes('tariffs will create')) positiveScore += 2;
+        if (content.includes('sanctions') || content.includes('retaliatory tariff')) negativeScore += 2;
+
+        let direction = 'neutral';
+        if (positiveScore > negativeScore) direction = 'positive';
+        if (negativeScore > positiveScore) direction = 'negative';
+
+        return {
+            direction,
+            label: SENTIMENT_META[direction].label,
+            score: positiveScore - negativeScore
         };
     }
 
@@ -578,11 +573,11 @@ class ReflexChart {
         const {
             OhlcDataSeries,
             FastCandlestickRenderableSeries,
-            EllipseAnnotation,
+            TextAnnotation,
+            VerticalLineAnnotation,
             ELabelPlacement,
             EHorizontalAnchorPoint,
             EVerticalAnchorPoint,
-            ECoordinateMode,
             Thickness,
             NumberRange
         } = SciChart;
@@ -616,27 +611,30 @@ class ReflexChart {
             const y = this.closestCandle(event.date, data)?.high || data[0].high;
             const meta = SENTIMENT_META[event.sentiment.direction];
 
-            this.sciChartSurface.annotations.add(new EllipseAnnotation({
-                id: `tweet-marker-${event.id}`,
+            this.sciChartSurface.annotations.add(new VerticalLineAnnotation({
+                id: `tweet-line-${event.id}`,
                 x1: x,
-                y1: 0.98,
-                width: 5,
-                height: 5,
-                yCoordinateMode: ECoordinateMode.Relative,
-                fill: meta.color + '80',
-                stroke: 'transparent',
-                horizontalAnchorPoint: EHorizontalAnchorPoint.Center,
-                verticalAnchorPoint: EVerticalAnchorPoint.Center
+                stroke: meta.color,
+                strokeThickness: 1,
+                strokeDashArray: [4, 4],
+                showLabel: true,
+                labelValue: `${meta.label} tweet`,
+                labelPlacement: ELabelPlacement.Top,
+                axisLabelFill: meta.color
             }));
 
-            if (this.showVerticalLines) {
-                this.sciChartSurface.annotations.add(new SciChart.VerticalLineAnnotation({
-                    x1: x,
-                    stroke: meta.color + '33',
-                    strokeThickness: 1,
-                    showLabel: false
-                }));
-            }
+            this.sciChartSurface.annotations.add(new TextAnnotation({
+                id: `tweet-marker-${event.id}`,
+                x1: x,
+                y1: y,
+                text: event.markerTitle,
+                fontSize: 12,
+                textColor: '#FFFFFF',
+                backgroundColor: meta.color,
+                padding: Thickness.fromString('2 5 2 5'),
+                horizontalAnchorPoint: EHorizontalAnchorPoint.Center,
+                verticalAnchorPoint: EVerticalAnchorPoint.Bottom
+            }));
         });
 
         this.applyInitialSciChartRange(data);
@@ -648,11 +646,11 @@ class ReflexChart {
         const {
             XyDataSeries,
             FastLineRenderableSeries,
-            EllipseAnnotation,
+            TextAnnotation,
+            VerticalLineAnnotation,
             ELabelPlacement,
             EHorizontalAnchorPoint,
             EVerticalAnchorPoint,
-            ECoordinateMode,
             Thickness
         } = SciChart;
 
@@ -678,17 +676,29 @@ class ReflexChart {
             const y = this.closestCandle(event.date, data)?.close || data[0].close;
             const meta = SENTIMENT_META[event.sentiment.direction];
 
-            this.sciChartSurface.annotations.add(new EllipseAnnotation({
+            this.sciChartSurface.annotations.add(new VerticalLineAnnotation({
+                id: `tweet-line-${event.id}`,
+                x1: x,
+                stroke: meta.color,
+                strokeThickness: 1,
+                strokeDashArray: [4, 4],
+                showLabel: true,
+                labelValue: `${meta.label} tweet`,
+                labelPlacement: ELabelPlacement.Top,
+                axisLabelFill: meta.color
+            }));
+
+            this.sciChartSurface.annotations.add(new TextAnnotation({
                 id: `tweet-marker-${event.id}`,
                 x1: x,
-                y1: 0.98,
-                width: 5,
-                height: 5,
-                yCoordinateMode: ECoordinateMode.Relative,
-                fill: meta.color + '80',
-                stroke: 'transparent',
+                y1: y,
+                text: event.markerTitle,
+                fontSize: 12,
+                textColor: '#FFFFFF',
+                backgroundColor: meta.color,
+                padding: Thickness.fromString('2 5 2 5'),
                 horizontalAnchorPoint: EHorizontalAnchorPoint.Center,
-                verticalAnchorPoint: EVerticalAnchorPoint.Center
+                verticalAnchorPoint: EVerticalAnchorPoint.Bottom
             }));
         });
 
@@ -775,12 +785,6 @@ class ReflexChart {
                 crosshair: true,
                 lineColor: '#E4E4E7',
                 tickColor: '#E4E4E7',
-                plotLines: this.showVerticalLines ? visibleEvents.map(event => ({
-                    value: event.date.getTime(),
-                    color: SENTIMENT_META[event.sentiment.direction].color + '33',
-                    width: 1,
-                    zIndex: 1
-                })) : [],
                 events: {
                     afterSetExtremes: (e) => {
                         if (!e.trigger) return; // Prevent infinite loops from programmatic sets
@@ -790,7 +794,25 @@ class ReflexChart {
                         });
                         this.populateTweetStream(this.currentTicker, filteredEvents);
                     }
-                }
+                },
+                plotLines: visibleEvents.map(event => ({
+                    id: `tweet-line-${event.id}`,
+                    value: event.date.getTime(),
+                    color: event.markerColor,
+                    width: 1,
+                    dashStyle: 'ShortDash',
+                    zIndex: 4,
+                    label: {
+                        text: event.markerTitle,
+                        rotation: 0,
+                        y: 12,
+                        style: {
+                            color: event.markerColor,
+                            fontWeight: '700',
+                            fontSize: '10px'
+                        }
+                    }
+                }))
             },
             yAxis: {
                 opposite: true,
@@ -910,7 +932,25 @@ class ReflexChart {
                         });
                         this.populateTweetStream(this.currentTicker, filteredEvents);
                     }
-                }
+                },
+                plotLines: visibleEvents.map(event => ({
+                    id: `tweet-line-${event.id}`,
+                    value: event.date.getTime(),
+                    color: event.markerColor,
+                    width: 1,
+                    dashStyle: 'ShortDash',
+                    zIndex: 4,
+                    label: {
+                        text: event.markerTitle,
+                        rotation: 0,
+                        y: 12,
+                        style: {
+                            color: event.markerColor,
+                            fontWeight: '700',
+                            fontSize: '10px'
+                        }
+                    }
+                }))
             },
             yAxis: {
                 opposite: true,
@@ -981,7 +1021,7 @@ class ReflexChart {
                     .filter(event => event.sentiment.direction === direction)
                     .map(event => ({
                         x: event.date.getTime(),
-                        title: '', // No text label
+                        title: meta.title,
                         text: `${meta.label} tweet<br>${this.escapeHtml(event.text)}<br>Post move: ${event.reaction.label}`
                     }));
 
@@ -989,21 +1029,10 @@ class ReflexChart {
                     type: 'flags',
                     name: `${meta.label} tweets`,
                     data,
-                    onSeries: undefined, 
-                    shape: 'circlepin',
-                    width: 5,
-                    height: 5,
-                    y: -5, // Closer to axis
-                    fillColor: meta.color + '80', // 50% opacity hex
-                    color: 'transparent',
-                    lineColor: 'transparent',
-                    states: {
-                        hover: { 
-                            fillColor: meta.color,
-                            width: 8,
-                            height: 8
-                        }
-                    }
+                    onSeries: onSeriesId,
+                    fillColor: meta.color,
+                    color: meta.color,
+                    lineColor: meta.color
                 };
             })
             .filter(series => series.data.length > 0);
@@ -1163,25 +1192,10 @@ class ReflexChart {
             return keywords.some(keyword => content.includes(keyword));
         });
 
-        this.renderFilteredStream(filteredEvents, `Topic: ${topicName}`);
-    }
-
-    filterEventsByKeyword(keyword) {
-        if (!this.currentEvents) return;
-
-        const query = keyword.toLowerCase();
-        const filteredEvents = this.currentEvents.filter(event => {
-            return event.text.toLowerCase().includes(query);
-        });
-
-        this.renderFilteredStream(filteredEvents, `Keyword: ${keyword}`);
-    }
-
-    renderFilteredStream(filteredEvents, label) {
         const displayTicker = this.displayTickerLabel(this.currentTicker);
         const subtitle = document.getElementById('tweet-stream-subtitle');
         if (subtitle) {
-            subtitle.innerHTML = `Showing <strong>${filteredEvents.length}</strong> tweets matching <strong>${label}</strong> for <strong>${displayTicker}</strong>.`;
+            subtitle.innerHTML = `<span style="color: ${topic.color}; font-weight: 700;">${topicName}</span>: ${filteredEvents.length} posts found in the ${displayTicker} range.`;
         }
 
         this.populateTweetStream(this.currentTicker, filteredEvents);
@@ -1195,239 +1209,32 @@ class ReflexChart {
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
     }
-    resetDashboard() {
-        if (window.selectTickerUI) {
-            window.selectTickerUI('SP500', 'S&P 500 Index');
-        } else {
-            this.update('SP500');
-        }
-
-        this.currentYear = '2025';
-        const yearSelector = document.getElementById('year-selector');
-        if (yearSelector) yearSelector.value = '2025';
-
-        if (window.resetWordCloud) {
-            window.resetWordCloud();
-        }
-    }
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
     window.reflexChart = new ReflexChart('candlestick-chart');
 
-    // State management for stocks
-    let availableStocks = [
-        { ticker: 'SP500', name: 'S&P 500 Index' },
-        { ticker: 'NVDA', name: 'NVIDIA Corp' }
-    ];
+    const stockSelector = document.getElementById('stock-selector');
+    const engineSelector = document.getElementById('chart-engine-selector');
 
-    async function refreshStockList() {
-        try {
-            const res = await fetch('/api/list-stocks');
-            if (res.ok) {
-                const data = await res.json();
-                if (Array.isArray(data) && data.length > 0) {
-                    availableStocks = data;
-                }
-            }
-        } catch (e) {
-            console.warn('API /api/list-stocks unreachable, using defaults.');
-        }
-        window.AVAILABLE_STOCKS = availableStocks;
+    await window.reflexChart.update(stockSelector?.value || 'SPY', engineSelector?.value || 'scichart');
+
+    if (stockSelector) {
+        stockSelector.addEventListener('change', event => {
+            window.reflexChart.update(event.target.value, engineSelector?.value || window.reflexChart.chartEngine);
+        });
     }
 
-    await refreshStockList();
-    window.refreshStockList = refreshStockList;
-
-    // DOM Elements
-    const combobox = document.getElementById('stock-combobox');
-    const input = document.getElementById('stock-search-input');
-    const list = document.getElementById('stock-options-list');
-    const modalOverlay = document.getElementById('stock-modal-overlay');
-    const closeModalBtn = document.getElementById('close-modal');
-    const modalTickerInput = document.getElementById('modal-ticker-input');
-    const modalFetchBtn = document.getElementById('modal-fetch-btn');
-    const modalLoader = document.getElementById('modal-loader');
-    const modalStockList = document.getElementById('modal-stock-list');
-    const engineSelector = document.getElementById('chart-engine-selector');
-    const yearSelector = document.getElementById('year-selector');
-
-    let selectedTicker = 'SP500';
-
-    // UI: Modal Logic
-    const openModal = () => {
-        modalOverlay.style.display = 'flex';
-        renderModalStockList();
-        modalTickerInput.focus();
-        list.style.display = 'none';
-        combobox.classList.remove('open');
-    };
-
-    const closeModal = () => {
-        modalOverlay.style.display = 'none';
-        modalTickerInput.value = '';
-    };
-
-    const renderModalStockList = () => {
-        modalStockList.innerHTML = '';
-        availableStocks.forEach(s => {
-            const li = document.createElement('li');
-            li.className = 'modal-stock-item';
-            li.innerHTML = `
-                <span>${s.name}</span>
-                <span class="ticker">${s.ticker}</span>
-            `;
-            li.onclick = () => {
-                selectTicker(s.ticker, s.name);
-                closeModal();
-            };
-            modalStockList.appendChild(li);
-        });
-    };
-
-    // UI: Combobox Logic
-    const selectTicker = async (ticker, name) => {
-        selectedTicker = ticker;
-        const stock = availableStocks.find(s => s.ticker === ticker);
-        input.value = name || stock?.name || ticker;
-        list.style.display = 'none';
-        combobox.classList.remove('open');
-        await window.reflexChart.update(ticker, engineSelector?.value || 'highcharts');
-    };
-    window.selectTickerUI = selectTicker;
-
-    const renderOptions = (filter = '') => {
-        const query = filter.toLowerCase();
-        const filtered = availableStocks.filter(s => 
-            s.ticker.toLowerCase().includes(query) || 
-            s.name.toLowerCase().includes(query)
-        );
-
-        list.innerHTML = '';
-        
-        // Add matching stocks
-        filtered.forEach(s => {
-            const li = document.createElement('li');
-            li.className = 'combobox-option';
-            if (s.ticker === selectedTicker) li.classList.add('selected');
-            li.innerHTML = `
-                <span class="name-label">${s.name}</span>
-                <span class="ticker-badge">${s.ticker}</span>
-            `;
-            li.onmousedown = (e) => {
-                e.preventDefault(); // Prevent input from blurring and closing the list
-                selectTicker(s.ticker, s.name);
-            };
-            list.appendChild(li);
-        });
-
-        // Always add 'Add New' at the bottom
-        const addNewLi = document.createElement('li');
-        addNewLi.className = 'combobox-option add-new-option';
-        addNewLi.innerHTML = `
-            <span>Add New Ticker...</span>
-            <i data-lucide="plus-circle" style="width:14px; height:14px;"></i>
-        `;
-        addNewLi.onclick = (e) => {
-            e.stopPropagation();
-            openModal();
-        };
-        list.appendChild(addNewLi);
-        
-        if (window.lucide) lucide.createIcons();
-        list.style.display = 'block';
-    };
-
-    // Event Listeners
-    input.addEventListener('focus', () => {
-        combobox.classList.add('open');
-        // If the value matches the selected ticker's name, show all options instead of filtering
-        const stock = availableStocks.find(s => s.ticker === selectedTicker);
-        if (input.value === (stock?.name || selectedTicker)) {
-            renderOptions('');
-        } else {
-            renderOptions(input.value);
-        }
-    });
-
-    input.addEventListener('input', (e) => {
-        renderOptions(e.target.value);
-    });
-
-    // Close dropdown on click outside
-    document.addEventListener('click', (e) => {
-        if (!combobox.contains(e.target)) {
-            list.style.display = 'none';
-            combobox.classList.remove('open');
-        }
-    });
-
-    // Modal Events
-    closeModalBtn.addEventListener('click', closeModal);
-    modalOverlay.addEventListener('click', (e) => {
-        if (e.target === modalOverlay) closeModal();
-    });
-
-    modalFetchBtn.addEventListener('click', async () => {
-        const ticker = modalTickerInput.value.trim().toUpperCase();
-        if (!ticker) return;
-
-        // Check if already exists
-        if (availableStocks.some(s => s.ticker === ticker)) {
-            alert(`${ticker} is already in your local storage.`);
-            return;
-        }
-
-        modalLoader.style.display = 'flex';
-        modalFetchBtn.disabled = true;
-
-        try {
-            const res = await fetch(`/api/fetch-stock?ticker=${ticker}`);
-            const data = await res.json();
-            
-            if (!res.ok) throw new Error(data.error || 'Fetch failed');
-
-            // Success: Add to list
-            await refreshStockList();
-            renderModalStockList();
-            
-            // Automatically select and close after small delay for feedback
-            setTimeout(() => {
-                selectTicker(data.ticker, data.ticker);
-                closeModal();
-                modalLoader.style.display = 'none';
-                modalFetchBtn.disabled = false;
-            }, 800);
-
-        } catch (err) {
-            console.error('Fetch error:', err);
-            alert(`Error: ${err.message}`);
-            modalLoader.style.display = 'none';
-            modalFetchBtn.disabled = false;
-        }
-    });
-
-    // Handle initial selection
-    await selectTicker('SP500', 'S&P 500 Index');
-
-    // Engine/Year Selectors
     if (engineSelector) {
         engineSelector.addEventListener('change', event => {
             window.reflexChart.setChartEngine(event.target.value);
         });
     }
 
+    const yearSelector = document.getElementById('year-selector');
     if (yearSelector) {
         yearSelector.addEventListener('change', event => {
             window.reflexChart.update(window.reflexChart.currentTicker, window.reflexChart.chartEngine, event.target.value);
-        });
-    }
-
-    const verticalLinesToggle = document.getElementById('vertical-lines-toggle');
-    if (verticalLinesToggle) {
-        verticalLinesToggle.addEventListener('change', event => {
-            window.reflexChart.showVerticalLines = event.target.checked;
-            window.reflexChart.renderActiveChart();
         });
     }
 
