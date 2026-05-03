@@ -42,14 +42,19 @@
                             <p class="subtitle" id="dynamic-chart-subtitle">1-Minute SPY ETF Chart ±30m around tweet timestamps</p>
                         </div>
                         <div class="chart-control-panel">
-                            <div class="selector-container">
-                                <label class="control-label" for="stock-selector">Ticker</label>
-                                <select id="stock-selector" class="stock-select">
-                                    <option value="SP500" selected>S&P 500 Index</option>
-                                    <option value="NVDA">NVDA (NVIDIA)</option>
-                                </select>
+                        <div class="selector-container">
+                            <label class="control-label" for="stock-search-input">Ticker</label>
+                            <div class="custom-combobox" id="stock-combobox">
+                                <div class="combobox-input-wrapper">
+                                    <input type="text" id="stock-search-input" class="stock-input" placeholder="Search stocks..." autocomplete="off">
+                                    <i data-lucide="chevron-down" class="combobox-chevron"></i>
+                                </div>
+                                <ul id="stock-options-list" class="combobox-options" style="display: none">
+                                    <!-- Stocks and 'Add New' will be here -->
+                                </ul>
                             </div>
-                            <div class="selector-container">
+                        </div>
+                            <div class="selector-container" style="display: none;">
                                 <label class="control-label" for="chart-engine-selector">Chart Engine</label>
                                 <select id="chart-engine-selector" class="stock-select">
                                     <option value="scichart">SciChart</option>
@@ -149,6 +154,32 @@
                         Demonstrates hypothesis: ...
                     </div>
                 </div>
+
+    <div id="stock-modal-overlay" class="modal-overlay" style="display: none">
+        <div class="stock-modal">
+            <div class="modal-header">
+                <h3 class="display-header">Add <span class="emphasis-italic">New Stock</span></h3>
+                <button id="close-modal" class="close-btn"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-hint">Enter a ticker symbol to fetch 1-month historical data via Yahoo Finance.</p>
+                <div class="fetch-input-group">
+                    <input type="text" id="modal-ticker-input" placeholder="e.g. AAPL, TSLA" maxlength="10">
+                    <button id="modal-fetch-btn" class="primary-btn">Fetch Data</button>
+                </div>
+                <div id="modal-loader" class="modal-loader" style="display: none">
+                    <div class="spinner"></div>
+                    <span>Fetching market data from Yahoo Finance...</span>
+                </div>
+                <div class="available-stocks-section">
+                    <label class="control-label">Available in Local Storage</label>
+                    <ul id="modal-stock-list" class="modal-stock-list">
+                        <!-- List of current stocks -->
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="script.js"></script>
     <script src="wordCloud.js"></script>

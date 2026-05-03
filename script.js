@@ -227,10 +227,12 @@ class ReflexChart {
     }
 
     syncTickerSelector(tickerSymbol) {
-        const selector = document.getElementById('stock-selector');
-        if (!selector) return;
-        const hasOption = Array.from(selector.options).some(option => option.value === tickerSymbol);
-        if (hasOption) selector.value = tickerSymbol;
+        const input = document.getElementById('stock-search-input');
+        if (!input) return;
+        // In the new combobox, we just update the input value.
+        // We can't easily find the 'name' here without access to availableStocks,
+        // so we just show the ticker or let the combobox logic handle it.
+        if (tickerSymbol) input.value = tickerSymbol;
     }
 
     syncYearSelector(year) {
@@ -268,9 +270,41 @@ class ReflexChart {
                 .sort((a, b) => a.date - b.date);
         }
 
+        // Try to load from a locally fetched CSV first
+        try {
+            const fetchedFilename = `${tickerSymbol}_last_1mo.csv`;
+            const checkRes = await fetch(fetchedFilename, { method: 'HEAD' });
+            if (checkRes.ok) {
+                const rawData = await d3.csv(fetchedFilename);
+                if (rawData && rawData.length > 0) {
+                    const parsedData = rawData
+                        .map(d => ({
+                            date: this.parseMarketDate(d.Date || d.date || d.datetime),
+                            open: parseFloat(d.Open || d.open),
+                            high: parseFloat(d.High || d.high),
+                            low: parseFloat(d.Low || d.low),
+                            close: parseFloat(d.Close || d.close)
+                        }))
+                        .filter(d => {
+                            if (!this.isValidCandle(d)) return false;
+                            const year = d.date.getFullYear();
+                            return this.currentYear === 'all' || year === parseInt(this.currentYear, 10);
+                        })
+                        .sort((a, b) => a.date - b.date);
+                    
+                    if (parsedData.length > 0) return parsedData;
+                }
+            }
+        } catch (e) {
+            console.log(`No fetched CSV found for ${tickerSymbol}, falling back to mock data.`);
+        }
+
+        // Fallback to mockLibrary
         const response = await fetch('stock_data_mock.json');
         const mockLibrary = await response.json();
-        return (mockLibrary[tickerSymbol] || mockLibrary.SP500 || mockLibrary.SPY).data
+        const entry = mockLibrary[tickerSymbol] || mockLibrary.SP500 || mockLibrary.SPY;
+        
+        return entry.data
             .map(d => ({
                 date: this.parseMarketDate(d.date),
                 open: Number(d.open),
@@ -1214,24 +1248,179 @@ class ReflexChart {
 document.addEventListener('DOMContentLoaded', async () => {
     window.reflexChart = new ReflexChart('candlestick-chart');
 
-    const stockSelector = document.getElementById('stock-selector');
+    // State management for stocks
+    let availableStocks = [
+        { ticker: 'SP500', name: 'S&P 500 Index' },
+        { ticker: 'NVDA', name: 'NVIDIA Corp' },
+        { ticker: 'BA', name: 'Boeing Co' },
+        { ticker: 'CAT', name: 'Caterpillar Inc' },
+        { ticker: 'RTX', name: 'Raytheon Technologies' },
+        { ticker: 'XOM', name: 'Exxon Mobil Corp' }
+    ];
+
+    // DOM Elements
+    const combobox = document.getElementById('stock-combobox');
+    const input = document.getElementById('stock-search-input');
+    const list = document.getElementById('stock-options-list');
+    const modalOverlay = document.getElementById('stock-modal-overlay');
+    const closeModalBtn = document.getElementById('close-modal');
+    const modalTickerInput = document.getElementById('modal-ticker-input');
+    const modalFetchBtn = document.getElementById('modal-fetch-btn');
+    const modalLoader = document.getElementById('modal-loader');
+    const modalStockList = document.getElementById('modal-stock-list');
     const engineSelector = document.getElementById('chart-engine-selector');
+    const yearSelector = document.getElementById('year-selector');
 
-    await window.reflexChart.update(stockSelector?.value || 'SPY', engineSelector?.value || 'scichart');
+    let selectedTicker = 'SP500';
 
-    if (stockSelector) {
-        stockSelector.addEventListener('change', event => {
-            window.reflexChart.update(event.target.value, engineSelector?.value || window.reflexChart.chartEngine);
+    // UI: Modal Logic
+    const openModal = () => {
+        modalOverlay.style.display = 'flex';
+        renderModalStockList();
+        modalTickerInput.focus();
+        list.style.display = 'none';
+        combobox.classList.remove('open');
+    };
+
+    const closeModal = () => {
+        modalOverlay.style.display = 'none';
+        modalTickerInput.value = '';
+    };
+
+    const renderModalStockList = () => {
+        modalStockList.innerHTML = '';
+        availableStocks.forEach(s => {
+            const li = document.createElement('li');
+            li.className = 'modal-stock-item';
+            li.innerHTML = `
+                <span>${s.name}</span>
+                <span class="ticker">${s.ticker}</span>
+            `;
+            modalStockList.appendChild(li);
         });
-    }
+    };
 
+    // UI: Combobox Logic
+    const selectTicker = async (ticker, name) => {
+        selectedTicker = ticker;
+        input.value = name || ticker;
+        list.style.display = 'none';
+        combobox.classList.remove('open');
+        await window.reflexChart.update(ticker, engineSelector?.value || 'scichart');
+    };
+
+    const renderOptions = (filter = '') => {
+        const query = filter.toLowerCase();
+        const filtered = availableStocks.filter(s => 
+            s.ticker.toLowerCase().includes(query) || 
+            s.name.toLowerCase().includes(query)
+        );
+
+        list.innerHTML = '';
+        
+        // Add matching stocks
+        filtered.forEach(s => {
+            const li = document.createElement('li');
+            li.className = 'combobox-option';
+            if (s.ticker === selectedTicker) li.classList.add('selected');
+            li.innerHTML = `
+                <span class="name-label">${s.name}</span>
+                <span class="ticker-badge">${s.ticker}</span>
+            `;
+            li.onclick = () => selectTicker(s.ticker, s.name);
+            list.appendChild(li);
+        });
+
+        // Always add 'Add New' at the bottom
+        const addNewLi = document.createElement('li');
+        addNewLi.className = 'combobox-option add-new-option';
+        addNewLi.innerHTML = `
+            <span>Add New Ticker...</span>
+            <i data-lucide="plus-circle" style="width:14px; height:14px;"></i>
+        `;
+        addNewLi.onclick = (e) => {
+            e.stopPropagation();
+            openModal();
+        };
+        list.appendChild(addNewLi);
+        
+        if (window.lucide) lucide.createIcons();
+        list.style.display = 'block';
+    };
+
+    // Event Listeners
+    input.addEventListener('focus', () => {
+        combobox.classList.add('open');
+        renderOptions(input.value);
+    });
+
+    input.addEventListener('input', (e) => {
+        renderOptions(e.target.value);
+    });
+
+    // Close dropdown on click outside
+    document.addEventListener('click', (e) => {
+        if (!combobox.contains(e.target)) {
+            list.style.display = 'none';
+            combobox.classList.remove('open');
+        }
+    });
+
+    // Modal Events
+    closeModalBtn.addEventListener('click', closeModal);
+    modalOverlay.addEventListener('click', (e) => {
+        if (e.target === modalOverlay) closeModal();
+    });
+
+    modalFetchBtn.addEventListener('click', async () => {
+        const ticker = modalTickerInput.value.trim().toUpperCase();
+        if (!ticker) return;
+
+        // Check if already exists
+        if (availableStocks.some(s => s.ticker === ticker)) {
+            alert(`${ticker} is already in your local storage.`);
+            return;
+        }
+
+        modalLoader.style.display = 'flex';
+        modalFetchBtn.disabled = true;
+
+        try {
+            const res = await fetch(`/api/fetch-stock?ticker=${ticker}`);
+            const data = await res.json();
+            
+            if (!res.ok) throw new Error(data.error || 'Fetch failed');
+
+            // Success: Add to list
+            availableStocks.push({ ticker: data.ticker, name: data.ticker }); // Name defaults to ticker for now
+            renderModalStockList();
+            
+            // Automatically select and close after small delay for feedback
+            setTimeout(() => {
+                selectTicker(data.ticker, data.ticker);
+                closeModal();
+                modalLoader.style.display = 'none';
+                modalFetchBtn.disabled = false;
+            }, 800);
+
+        } catch (err) {
+            console.error('Fetch error:', err);
+            alert(`Error: ${err.message}`);
+            modalLoader.style.display = 'none';
+            modalFetchBtn.disabled = false;
+        }
+    });
+
+    // Handle initial selection
+    await selectTicker('SP500', 'S&P 500 Index');
+
+    // Engine/Year Selectors
     if (engineSelector) {
         engineSelector.addEventListener('change', event => {
             window.reflexChart.setChartEngine(event.target.value);
         });
     }
 
-    const yearSelector = document.getElementById('year-selector');
     if (yearSelector) {
         yearSelector.addEventListener('change', event => {
             window.reflexChart.update(window.reflexChart.currentTicker, window.reflexChart.chartEngine, event.target.value);

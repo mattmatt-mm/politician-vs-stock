@@ -1,0 +1,13 @@
+{
+  "name": "politician-vs-stock",
+  "version": "1.0.0",
+  "description": "Dashboard tracking politician tweets vs stock market reactions.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.22.1"
+  }
+}
