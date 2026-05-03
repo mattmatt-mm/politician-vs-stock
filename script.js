@@ -13,28 +13,8 @@ const MARKET_KEYWORDS = {
     ]
 };
 
-const TOPIC_DEFINITIONS = {
-    'War & Defense': {
-        keywords: ['war', 'military', 'defense', 'nato', 'missile', 'strike', 'conflict', 'russia', 'china', 'raytheon', 'lockheed', 'pentagon'],
-        color: '#E11D48' // Red-ish for intensity
-    },
-    'Tariffs & Trade': {
-        keywords: ['tariff', 'tariffs', 'tax', 'trade war', 'trade', 'sanctions', 'economy', 'manufacturing', 'protectionism', 'duties'],
-        color: '#D97706' // Amber for economic caution
-    },
-    'Tech & AI': {
-        keywords: ['nvidia', 'nvda', 'ai', 'chip', 'semiconductor', 'palantir', 'pltr', 'tech', 'innovation', 'apple', 'microsoft', 'google'],
-        color: '#2563EB' // Blue for tech
-    },
-    'Immigration': {
-        keywords: ['border', 'ice', 'migrant', 'immigration', 'wall', 'secure', 'deportation', 'asylum'],
-        color: '#059669' // Green for land/border
-    },
-    'Politics': {
-        keywords: ['biden', 'democrats', 'republican', 'election', 'judge', 'pardon', 'victory', 'crooked', 'fake news'],
-        color: '#7C3AED' // Purple for politics
-    }
-};
+// Topic definitions are now loaded dynamically from data/ml/topic_definitions.json
+window.TOPIC_DEFINITIONS = {};
 
 const SENTIMENT_TERMS = {
     positive: [
@@ -72,6 +52,7 @@ class ReflexChart {
         this.currentStockData = [];
         this.currentEvents = [];
         this.showVerticalLines = false;
+        this.selectedEventId = null;
         this.currentWindowMs = null;
 
         this.sciChartSurface = null;
@@ -159,7 +140,7 @@ class ReflexChart {
         if (this.tweets.length > 0) return this.tweets;
 
         try {
-            const data = await d3.csv('trump_tweets_scored.csv?v=2019-2025');
+            const data = await d3.csv('data/ml/trump_tweets_topics.csv?v=' + Date.now());
             this.tweets = data
                 .map(d => ({
                     id: d.id,
@@ -169,7 +150,11 @@ class ReflexChart {
                     postUrl: d.post_url,
                     deleted: String(d.deleted_flag).toLowerCase() === 'true',
                     sentimentDirection: d.sentiment_direction || 'neutral',
-                    sentimentScore: parseFloat(d.sentiment_score) || 0
+                    sentimentScore: parseFloat(d.sentiment_score) || 0,
+                    topic: d.dominant_topic,
+                    positivity: parseFloat(d.vader_positivity) || 0,
+                    tbPolarity: parseFloat(d.textblob_polarity) || 0,
+                    tbSubjectivity: parseFloat(d.textblob_subjectivity) || 0
                 }))
                 .filter(tweet => {
                     if (!tweet.date || Number.isNaN(tweet.date.getTime()) || tweet.deleted) return false;
@@ -616,6 +601,8 @@ class ReflexChart {
             const y = this.closestCandle(event.date, data)?.high || data[0].high;
             const meta = SENTIMENT_META[event.sentiment.direction];
 
+            const isSelected = this.selectedEventId && event.id === this.selectedEventId;
+
             this.sciChartSurface.annotations.add(new EllipseAnnotation({
                 id: `tweet-marker-${event.id}`,
                 x1: x,
@@ -623,17 +610,17 @@ class ReflexChart {
                 width: 5,
                 height: 5,
                 yCoordinateMode: ECoordinateMode.Relative,
-                fill: meta.color + '80',
+                fill: meta.color + (isSelected ? '' : '80'),
                 stroke: 'transparent',
                 horizontalAnchorPoint: EHorizontalAnchorPoint.Center,
                 verticalAnchorPoint: EVerticalAnchorPoint.Center
             }));
 
-            if (this.showVerticalLines) {
+            if (this.showVerticalLines || isSelected) {
                 this.sciChartSurface.annotations.add(new SciChart.VerticalLineAnnotation({
                     x1: x,
-                    stroke: meta.color + '33',
-                    strokeThickness: 1,
+                    stroke: meta.color + (isSelected ? '' : '33'),
+                    strokeThickness: isSelected ? 2 : 1,
                     showLabel: false
                 }));
             }
@@ -678,6 +665,8 @@ class ReflexChart {
             const y = this.closestCandle(event.date, data)?.close || data[0].close;
             const meta = SENTIMENT_META[event.sentiment.direction];
 
+            const isSelected = this.selectedEventId && event.id === this.selectedEventId;
+
             this.sciChartSurface.annotations.add(new EllipseAnnotation({
                 id: `tweet-marker-${event.id}`,
                 x1: x,
@@ -685,11 +674,20 @@ class ReflexChart {
                 width: 5,
                 height: 5,
                 yCoordinateMode: ECoordinateMode.Relative,
-                fill: meta.color + '80',
+                fill: meta.color + (isSelected ? '' : '80'),
                 stroke: 'transparent',
                 horizontalAnchorPoint: EHorizontalAnchorPoint.Center,
                 verticalAnchorPoint: EVerticalAnchorPoint.Center
             }));
+
+            if (this.showVerticalLines || isSelected) {
+                this.sciChartSurface.annotations.add(new SciChart.VerticalLineAnnotation({
+                    x1: x,
+                    stroke: meta.color + (isSelected ? '' : '33'),
+                    strokeThickness: isSelected ? 2 : 1,
+                    showLabel: false
+                }));
+            }
         });
 
         this.applyInitialSciChartRange(data);
@@ -775,12 +773,17 @@ class ReflexChart {
                 crosshair: true,
                 lineColor: '#E4E4E7',
                 tickColor: '#E4E4E7',
-                plotLines: this.showVerticalLines ? visibleEvents.map(event => ({
-                    value: event.date.getTime(),
-                    color: SENTIMENT_META[event.sentiment.direction].color + '33',
-                    width: 1,
-                    zIndex: 1
-                })) : [],
+                plotLines: visibleEvents.filter(event => {
+                    return this.showVerticalLines || (this.selectedEventId && event.id === this.selectedEventId);
+                }).map(event => {
+                    const isSelected = this.selectedEventId && event.id === this.selectedEventId;
+                    return {
+                        value: event.date.getTime(),
+                        color: SENTIMENT_META[event.sentiment.direction].color + (isSelected ? '' : '33'),
+                        width: isSelected ? 2 : 1,
+                        zIndex: isSelected ? 5 : 1
+                    };
+                }),
                 events: {
                     afterSetExtremes: (e) => {
                         if (!e.trigger) return; // Prevent infinite loops from programmatic sets
@@ -901,6 +904,17 @@ class ReflexChart {
                 crosshair: true,
                 lineColor: '#E4E4E7',
                 tickColor: '#E4E4E7',
+                plotLines: visibleEvents.filter(event => {
+                    return this.showVerticalLines || (this.selectedEventId && event.id === this.selectedEventId);
+                }).map(event => {
+                    const isSelected = this.selectedEventId && event.id === this.selectedEventId;
+                    return {
+                        value: event.date.getTime(),
+                        color: SENTIMENT_META[event.sentiment.direction].color + (isSelected ? '' : '33'),
+                        width: isSelected ? 2 : 1,
+                        zIndex: isSelected ? 5 : 1
+                    };
+                }),
                 events: {
                     afterSetExtremes: (e) => {
                         if (!e.trigger) return;
@@ -982,7 +996,8 @@ class ReflexChart {
                     .map(event => ({
                         x: event.date.getTime(),
                         title: '', // No text label
-                        text: `${meta.label} tweet<br>${this.escapeHtml(event.text)}<br>Post move: ${event.reaction.label}`
+                        text: `${meta.label} tweet<br>${this.escapeHtml(event.text)}<br>Post move: ${event.reaction.label}`,
+                        fillColor: (this.selectedEventId && event.id === this.selectedEventId) ? meta.color : meta.color + '80'
                     }));
 
                 return {
@@ -994,7 +1009,6 @@ class ReflexChart {
                     width: 5,
                     height: 5,
                     y: -5, // Closer to axis
-                    fillColor: meta.color + '80', // 50% opacity hex
                     color: 'transparent',
                     lineColor: 'transparent',
                     states: {
@@ -1129,12 +1143,20 @@ class ReflexChart {
                 </div>
                 <div class="tweet-card-metrics">
                     <div class="tweet-card-metric">
-                        <span class="label">Tweet Marker</span>
-                        <span class="val" style="color: ${event.markerColor}">${event.markerTitle}</span>
+                        <span class="label">Move</span>
+                        <span class="val ${reactionClass}">${event.reaction.label}</span>
                     </div>
                     <div class="tweet-card-metric">
-                        <span class="label">Post Move</span>
-                        <span class="val ${reactionClass}">${event.reaction.label}</span>
+                        <span class="label">Polarity</span>
+                        <span class="val">${event.tbPolarity.toFixed(2)}</span>
+                    </div>
+                    <div class="tweet-card-metric">
+                        <span class="label">Subjectivity</span>
+                        <span class="val">${(event.tbSubjectivity * 100).toFixed(0)}%</span>
+                    </div>
+                    <div class="tweet-card-metric">
+                        <span class="label">Positivity</span>
+                        <span class="val">${(event.positivity * 100).toFixed(0)}%</span>
                     </div>
                 </div>
             `;
@@ -1142,7 +1164,9 @@ class ReflexChart {
             card.addEventListener('click', () => {
                 document.querySelectorAll('.tweet-card').forEach(c => c.classList.remove('active'));
                 card.classList.add('active');
+                this.selectedEventId = event.id;
                 this.panToDate(event.date);
+                this.renderActiveChart();
             });
 
             container.appendChild(card);
@@ -1154,13 +1178,11 @@ class ReflexChart {
     }
 
     filterEventsByTopic(topicName) {
-        const topic = TOPIC_DEFINITIONS[topicName];
+        const topic = window.TOPIC_DEFINITIONS[topicName];
         if (!topic || !this.currentEvents) return;
 
-        const keywords = topic.keywords;
         const filteredEvents = this.currentEvents.filter(event => {
-            const content = event.text.toLowerCase();
-            return keywords.some(keyword => content.includes(keyword));
+            return event.topic === topicName;
         });
 
         this.renderFilteredStream(filteredEvents, `Topic: ${topicName}`);
@@ -1236,7 +1258,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.AVAILABLE_STOCKS = availableStocks;
     }
 
+    async function loadTopics() {
+        try {
+            const res = await fetch('data/ml/topic_definitions.json');
+            if (res.ok) {
+                window.TOPIC_DEFINITIONS = await res.json();
+                if (window.updateWordCloud) window.updateWordCloud();
+            }
+        } catch (e) {
+            console.error('Failed to load topic definitions:', e);
+        }
+    }
+
     await refreshStockList();
+    await loadTopics();
     window.refreshStockList = refreshStockList;
 
     // DOM Elements

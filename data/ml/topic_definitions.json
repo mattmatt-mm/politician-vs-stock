@@ -1,0 +1,122 @@
+{
+    "Economy & Trade": {
+        "keywords": [
+            "great",
+            "america",
+            "make",
+            "country",
+            "people",
+            "big",
+            "back",
+            "good",
+            "win",
+            "many"
+        ],
+        "color": "#E11D48"
+    },
+    "National Security": {
+        "keywords": [
+            "image",
+            "vote",
+            "border",
+            "pm",
+            "great",
+            "live",
+            "tonight",
+            "join",
+            "state",
+            "big"
+        ],
+        "color": "#D97706"
+    },
+    "Media & Truth": {
+        "keywords": [
+            "total",
+            "complete",
+            "endorsement",
+            "second",
+            "secure",
+            "great",
+            "border",
+            "congressman",
+            "amendment",
+            "congressional"
+        ],
+        "color": "#059669"
+    },
+    "Energy & Border": {
+        "keywords": [
+            "news",
+            "biden",
+            "fake",
+            "joe",
+            "trump",
+            "media",
+            "president",
+            "left",
+            "like",
+            "crooked"
+        ],
+        "color": "#2563EB"
+    },
+    "Technology & Crypto": {
+        "keywords": [
+            "video",
+            "election",
+            "democrats",
+            "fbi",
+            "russia",
+            "country",
+            "people",
+            "hoax",
+            "never",
+            "quicktime"
+        ],
+        "color": "#7C3AED"
+    },
+    "Global Relations": {
+        "keywords": [
+            "thank",
+            "president",
+            "united",
+            "states",
+            "great",
+            "american",
+            "us",
+            "america",
+            "war",
+            "law"
+        ],
+        "color": "#4B5563"
+    },
+    "Political Strategy": {
+        "keywords": [
+            "trump",
+            "president",
+            "us",
+            "years",
+            "new",
+            "jobs",
+            "states",
+            "history",
+            "economy",
+            "ever"
+        ],
+        "color": "#10B981"
+    },
+    "Healthcare & Misc": {
+        "keywords": [
+            "trump",
+            "president",
+            "case",
+            "judge",
+            "new",
+            "york",
+            "election",
+            "biden",
+            "political",
+            "donald"
+        ],
+        "color": "#F43F5E"
+    }
+}

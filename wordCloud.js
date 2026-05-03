@@ -77,23 +77,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 type: 'keyword'
             }));
         } else if (currentMode === 'topics') {
-            const topics = window.TOPIC_DEFINITIONS || {
-                'War & Defense': { keywords: ['war', 'military', 'defense'], color: '#E11D48' },
-                'Tariffs & Trade': { keywords: ['tariff', 'china', 'trade', 'mexico'], color: '#D97706' },
-                'Economy & Tax': { keywords: ['tax', 'economy', 'jobs', 'stock', 'market'], color: '#059669' },
-                'Crypto & Tech': { keywords: ['crypto', 'bitcoin', 'ai', 'tech'], color: '#2563EB' },
-                'Media & Truth': { keywords: ['media', 'fake news', 'cnn', 'nbc', 'truth'], color: '#7C3AED' },
-                'Immigration': { keywords: ['border', 'wall', 'immigration'], color: '#4B5563' },
-                'Energy & Oil': { keywords: ['energy', 'oil', 'gas', 'climate'], color: '#10B981' },
-                'Healthcare': { keywords: ['health', 'pharma', 'insurance'], color: '#F43F5E' }
-            };
-            
-            words = Object.keys(topics).map(topicName => ({
-                text: topicName,
-                size: 44,
-                color: topics[topicName].color,
-                type: 'topic'
-            }));
+            const topics = window.TOPIC_DEFINITIONS;
+            if (!topics || Object.keys(topics).length === 0) {
+                words = [{ text: "Loading Topics...", size: 30, type: 'status' }];
+            } else {
+                words = Object.keys(topics).map(topicName => ({
+                    text: topicName,
+                    size: 44,
+                    color: topics[topicName].color,
+                    type: 'topic'
+                }));
+            }
         }
 
         const layout = d3.layout.cloud()

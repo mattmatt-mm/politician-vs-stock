@@ -42,12 +42,12 @@
                             <p class="subtitle" id="dynamic-chart-subtitle">1-Minute SPY ETF Chart ±30m around tweet timestamps</p>
                         </div>
                         <div class="chart-control-panel">
-                        <div class="selector-container">
-                            <label class="control-label" for="stock-search-input">Ticker</label>
+
+                            <div class="selector-container">
+                                <label class="control-label" for="stock-search-input">Ticker</label>
                             <div class="custom-combobox" id="stock-combobox">
                                 <div class="combobox-input-wrapper">
                                     <input type="text" id="stock-search-input" class="stock-input" placeholder="Search stocks..." autocomplete="off">
-                                    <i data-lucide="chevron-down" class="combobox-chevron"></i>
                                 </div>
                                 <ul id="stock-options-list" class="combobox-options" style="display: none">
                                     <!-- Stocks and 'Add New' will be here -->
@@ -75,7 +75,14 @@
                                     <option value="all">All Available</option>
                                 </select>
                             </div>
+
                             <div class="legend">
+                                <div class="legend-item" style="margin-right: 24px;">
+                                    <label style="display: flex; align-items: center; cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--zinc-600); font-weight: 500;">
+                                        <input type="checkbox" id="vertical-lines-toggle" style="margin-right: 8px;">
+                                        Vertical Timestamps
+                                    </label>
+                                </div>
                                 <div class="legend-item"><span class="dot positive"></span> Positive Tweet</div>
                                 <div class="legend-item"><span class="dot negative"></span> Negative Tweet</div>
                                 <div class="legend-item"><span class="dot neutral"></span> Neutral/Media</div>
@@ -111,12 +118,7 @@
                                     <option value="stocks">Stocks</option>
                                 </select>
                             </div>
-                            <div class="selector-container" style="margin-right: 16px;">
-                                <label class="control-label" style="display: flex; align-items: center; cursor: pointer;">
-                                    <input type="checkbox" id="vertical-lines-toggle" style="margin-right: 8px;">
-                                    Vertical Timestamps
-                                </label>
-                            </div>
+
                             <button id="reset-dashboard-btn" class="reset-button" onclick="window.reflexChart.resetDashboard()">
                                 <i data-lucide="rotate-ccw" style="width: 14px; height: 14px; margin-right: 6px; stroke-width: 2.5px;"></i>
                                 Reset All
@@ -130,7 +132,7 @@
                 <div class="dashboard-cell border-left" style="padding: 0;">
                     <div class="chart-header" style="margin-bottom: 8px; padding: 40px 40px 0 40px;">
                         <div>
-                            <h2 class="display-header">Related <span class="emphasis-italic">Intelligence</span></h2>
+                            <h2 class="display-header">Related <span class="emphasis-italic">Tweets</span></h2>
                             <p class="subtitle" id="tweet-stream-subtitle">Select a keyword to view underlying tweet catalysts alongside daily S&P 500 performance.</p>
                         </div>
                     </div>

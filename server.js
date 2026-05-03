@@ -106,7 +106,7 @@ app.get('/api/list-stocks', (req, res) => {
  * API Endpoint to get stock mention frequencies for the word cloud
  */
 app.get('/api/stock-mentions', (req, res) => {
-    const csvPath = path.join(__dirname, 'trump_tweets_scored.csv');
+    const csvPath = path.join(__dirname, 'data/ml/trump_tweets_topics.csv');
     if (!fs.existsSync(csvPath)) {
         return res.status(404).json({ error: 'Tweet dataset not found' });
     }

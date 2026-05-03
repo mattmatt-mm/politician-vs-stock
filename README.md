@@ -2,47 +2,68 @@
 
 Interactive dashboard exploring tweet timing, keyword/topic emphasis, and short-horizon equity context (candlesticks with sentiment-style labels and abnormal-return summaries). Built as a static front end served by a small Express app.
 
-## Requirements
+## 1. Initial Setup (Prerequisites)
 
-- **Node.js** 18+ (for `npm` and `node`)
-- **Python 3** (optional — only needed to fetch fresh OHLC CSVs via Yahoo Finance)
+To run this dashboard, you need to install **Node.js** (which includes `npm`, the package manager we use to run the server).
 
-## Quick start
+**How to install Node.js:**
+- **Mac / Windows**: Go to [nodejs.org](https://nodejs.org/) and download the "LTS" (Long Term Support) installer. Run the installer and follow the prompts.
+- **Mac (Homebrew)**: If you are familiar with Homebrew, you can simply open your terminal and run `brew install node`.
 
-From this directory (`politician-vs-stock/`):
-
+**Verify Installation:**
+Open your terminal (Terminal on Mac, Command Prompt/PowerShell on Windows) and type:
 ```bash
-npm install
-npm start
+node -v
+npm -v
 ```
+If both commands print a version number (e.g., `v18.x.x`), you are ready to go!
 
-The server listens on **port 3001**. Open:
+---
 
-**[http://localhost:3001](http://localhost:3001)**
+## 2. Start the App
 
-You should see `index.html` (“Trump Market Reflex”) with the candlestick view, word cloud, and related tweet panel.
+1. **Open your terminal** and navigate to this project directory:
+   ```bash
+   cd path/to/politician-vs-stock
+   ```
+   *(Tip: On Mac, you can type `cd ` and drag the folder into the terminal window to get the path).*
 
-### npm scripts
+2. **Install the required packages:**
+   ```bash
+   npm install
+   ```
+   *(This downloads the necessary tools like Express to run the local server).*
 
+3. **Start the server:**
+   ```bash
+   npm start
+   ```
 
-| Script        | Command          |
-| ------------- | ---------------- |
-| `npm start`   | `node server.js` |
-| `npm run dev` | Same as `start`  |
+4. **View the dashboard:**
+   Open your web browser and navigate to:
+   **[http://localhost:3001](http://localhost:3001)**
 
+You should see the "Trump Market Reflex" dashboard with the candlestick view, word cloud, and related tweet panel.
 
-## Optional: Python data fetch
+---
 
-To enable `**GET /api/fetch-stock?ticker=SYMBOL`** (used by the UI when adding a ticker) or to run the fetch script manually:
+## 3. (Optional) Python Setup for Fetching Live Data
 
+If you want to use the "Add New Ticker" feature in the dashboard to fetch fresh stock data, you need **Python 3** installed. 
+
+**How to install Python:**
+- Go to [python.org/downloads](https://www.python.org/downloads/) and install the latest version.
+- Or use Homebrew on Mac: `brew install python`
+
+**Install Python Dependencies:**
+Once Python is installed, open your terminal, navigate to the project folder, and run:
 ```bash
 cd fetch_stock
-python3 -m pip install -r requirements.txt
-cd ..
-python3 fetch_stock/fetch_stock.py NVDA
+pip3 install -r requirements.txt
 ```
+*(If `pip3` doesn't work, try `pip install -r requirements.txt` or `python3 -m pip install -r requirements.txt`).*
 
-That writes something like `NVDA_last_1mo.csv` in the **project root**. If Python or dependencies are missing, the dashboard still runs using bundled JSON/CSV where applicable.
+That's it! Now when you search for a new ticker in the dashboard, the server will use Python to fetch the data and save it as a CSV file. If Python is not installed, the dashboard will still work perfectly using the local, pre-bundled data.
 
 ## API
 

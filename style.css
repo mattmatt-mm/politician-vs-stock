@@ -260,8 +260,9 @@ h2.display-header {
 }
 
 .tweet-card-metrics {
-    display: flex;
-    gap: 24px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 16px;
     border-top: 1px solid var(--zinc-200);
     padding-top: 12px;
 }
@@ -269,19 +270,20 @@ h2.display-header {
 .tweet-card-metric {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
 }
 
 .tweet-card-metric .label {
-    font-size: 11px;
+    font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--zinc-600);
+    color: var(--zinc-400);
+    font-weight: 600;
 }
 
 .tweet-card-metric .val {
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 700;
 }
 
 /* Intersection Dot Logic */
