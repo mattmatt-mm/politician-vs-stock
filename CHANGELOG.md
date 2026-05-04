@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## [Completed] Dynamic Term Frequency (Range-Responsive)
+
+### Goal
+Make the term frequency bar chart responsive to the visible chart time range — as users zoom/pan, the word frequencies update to reflect only tweets in the visible window.
+
+### Changes
+
+| Date | File | Change | Status |
+|------|------|--------|--------|
+| 2026-05-05 | `script.js` | Added `computeTermFrequency(events)` method with stopword filtering | ✅ Done |
+| 2026-05-05 | `script.js` | `update()`: call `window.updateTermFrequency()` on initial load | ✅ Done |
+| 2026-05-05 | `script.js` | Both `afterSetExtremes` handlers: call `window.updateTermFrequency()` with filtered events | ✅ Done |
+| 2026-05-05 | `wordCloud.js` | Added `window.updateTermFrequency(freqData)` to accept dynamic data and re-render bar chart | ✅ Done |
+
+---
+
 ## [Completed] Topic Stock Signals & Term Frequency Features
 
 ### Goal

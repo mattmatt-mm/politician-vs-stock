@@ -288,5 +288,12 @@ document.addEventListener("DOMContentLoaded", () => {
         renderCloud();
     };
 
+    window.updateTermFrequency = function(freqData) {
+        termFreqData = freqData;
+        if (currentMode === 'terms-bar') {
+            renderBarChart();
+        }
+    };
+
     initCloud();
 });

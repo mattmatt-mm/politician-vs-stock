@@ -253,6 +253,46 @@ class ReflexChart {
             .trim();
     }
 
+    computeTermFrequency(events) {
+        const stopwords = new Set([
+            'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+            'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+            'should', 'may', 'might', 'must', 'shall', 'can', 'to', 'of', 'in',
+            'for', 'on', 'with', 'at', 'by', 'from', 'as', 'into', 'through',
+            'during', 'before', 'after', 'above', 'below', 'between', 'under',
+            'again', 'further', 'then', 'once', 'here', 'there', 'when', 'where',
+            'why', 'how', 'all', 'each', 'few', 'more', 'most', 'other', 'some',
+            'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than',
+            'too', 'very', 'just', 'and', 'but', 'if', 'or', 'because', 'until',
+            'while', 'this', 'that', 'these', 'those', 'am', 'it', 'its', 'he',
+            'she', 'they', 'them', 'his', 'her', 'their', 'what', 'which', 'who',
+            'whom', 'i', 'me', 'my', 'we', 'our', 'you', 'your', 'up', 'out',
+            'about', 'over', 'also', 'now', 'get', 'got', 'going', 'one', 'two',
+            'amp', 'rt', 'like', 'dont', 'didnt', 'wont', 'cant', 'im', 'ive',
+            'hes', 'shes', 'theyre', 'youre', 'weve', 'thats', 'whats', 'lets',
+            'us', 'him', 'much', 'many', 'make', 'made', 'go', 'went', 'come',
+            'came', 'take', 'took', 'know', 'knew', 'see', 'saw', 'want', 'back',
+            'even', 'well', 'way', 'new', 'say', 'said', 'says', 'tell', 'told',
+            'time', 'year', 'years', 'day', 'days', 'today', 'last', 'first',
+            'ever', 'never', 'always', 'still', 'already', 'really', 'being'
+        ]);
+
+        const freq = {};
+        for (const event of events) {
+            const text = (event.text || '').toLowerCase();
+            const cleaned = text
+                .replace(/https?:\/\/\S+/g, '')
+                .replace(/@\w+/g, '')
+                .replace(/#\w+/g, '')
+                .replace(/[^a-z\s]/g, ' ');
+            const words = cleaned.split(/\s+/).filter(w => w.length > 2 && !stopwords.has(w));
+            for (const word of words) {
+                freq[word] = (freq[word] || 0) + 1;
+            }
+        }
+        return freq;
+    }
+
     async update(tickerSymbol, engine = this.chartEngine, year = this.currentYear) {
         const normalizedTicker = this.normalizeTicker(tickerSymbol);
         this.currentTicker = normalizedTicker;
@@ -278,6 +318,9 @@ class ReflexChart {
 
             this.updateHeader(normalizedTicker);
             this.populateTweetStream(normalizedTicker, this.currentEvents);
+            if (window.updateTermFrequency) {
+                window.updateTermFrequency(this.computeTermFrequency(this.currentEvents));
+            }
             // Force range reset when changing ticker or year to fix "sticky range" bug
             await this.renderActiveChart(true);
         } catch (e) {
@@ -1048,6 +1091,9 @@ class ReflexChart {
                             return time >= e.min && time <= e.max;
                         });
                         this.populateTweetStream(this.currentTicker, filteredEvents);
+                        if (window.updateTermFrequency) {
+                            window.updateTermFrequency(this.computeTermFrequency(filteredEvents));
+                        }
                     }
                 }
             },
@@ -1208,6 +1254,9 @@ class ReflexChart {
                             return time >= e.min && time <= e.max;
                         });
                         this.populateTweetStream(this.currentTicker, filteredEvents);
+                        if (window.updateTermFrequency) {
+                            window.updateTermFrequency(this.computeTermFrequency(filteredEvents));
+                        }
                     }
                 }
             },
