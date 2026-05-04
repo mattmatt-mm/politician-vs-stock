@@ -14,24 +14,23 @@ app.use(express.static(__dirname));
  * Usage: /api/fetch-stock?ticker=NVDA
  */
 app.get('/api/fetch-stock', (req, res) => {
-    const { ticker, startYear, endYear } = req.query;
+    const { ticker, year } = req.query;
     
     if (!ticker) {
         return res.status(400).json({ error: 'Ticker is required' });
     }
 
     const cleanTicker = ticker.replace(/[^a-z0-9]/gi, '').toUpperCase();
-    const cleanStart = startYear ? startYear.replace(/[^0-9]/g, '') : '';
-    const cleanEnd = endYear ? endYear.replace(/[^0-9]/g, '') : '';
+    const cleanYear = year ? year.replace(/[^0-9]/g, '') : new Date().getFullYear().toString();
 
-    console.log(`Starting fetch for: ${cleanTicker} (${cleanStart} to ${cleanEnd}, Interval: 1h)`);
+    console.log(`Starting Yearly fetch for: ${cleanTicker} (Year: ${cleanYear}, Interval: 1h)`);
 
     // Use .venv python if it exists, otherwise fallback to python3
     const pythonPath = fs.existsSync(path.join(__dirname, '.venv', 'bin', 'python')) 
         ? './.venv/bin/python' 
         : 'python3';
 
-    const command = `${pythonPath} fetch_stock/fetch_stock.py ${cleanTicker} "${cleanStart}" "${cleanEnd}"`;
+    const command = `${pythonPath} fetch_stock/fetch_stock_v2.py ${cleanTicker} ${cleanYear}`;
 
     exec(command, { cwd: __dirname }, (error, stdout, stderr) => {
         if (error) {
@@ -51,8 +50,8 @@ app.get('/api/fetch-stock', (req, res) => {
         const filename = filenameMatch ? filenameMatch[1].trim() : null;
 
         if (filename) {
-            const fetchDir = path.join(__dirname, 'fetch_stock');
-            const filePath = path.join(fetchDir, filename);
+            const processedDir = path.join(__dirname, 'processed_stock');
+            const filePath = path.join(processedDir, filename);
             const exists = fs.existsSync(filePath);
             
             console.log(`Checking file: ${filePath} -> exists: ${exists}`);
@@ -65,9 +64,9 @@ app.get('/api/fetch-stock', (req, res) => {
                     message: `Successfully fetched data for ${cleanTicker}`
                 });
             } else {
-                const filesInDir = fs.readdirSync(fetchDir);
+                const filesInDir = fs.readdirSync(processedDir);
                 res.status(500).json({ 
-                    error: `Script reported success but file was not found.`,
+                    error: `Script reported success but file was not found in processed_stock.`,
                     checkedPath: filePath,
                     filename: filename,
                     directoryContents: filesInDir
@@ -111,10 +110,12 @@ const getDiscoveredTickers = () => {
         });
     };
 
+    // Prioritize processed_stock first
+    scanDir(path.join(__dirname, 'processed_stock'), /^(.+)\.csv$/);
+    scanDir(path.join(__dirname, 'fetch_stock'), /^(.+)\.csv$/);
     scanDir(__dirname, /^(.+)_index\.csv$/);
     scanDir(__dirname, /^(.+)\.csv$/);
     scanDir(path.join(__dirname, 'local_data'), /^(.+)\.csv$/);
-    scanDir(path.join(__dirname, 'fetch_stock'), /^(.+)\.csv$/);
     return stocks;
 };
 
@@ -143,7 +144,7 @@ const TOPIC_STOCK_MAP = {
  * Uses both direct mentions and semantic topic associations.
  */
 app.get('/api/stock-mentions', (req, res) => {
-    const csvPath = path.join(__dirname, 'data/ml/trump_tweets_topics.csv');
+    const csvPath = path.join(__dirname, 'processed_tweet/trump_tweets_topics.csv');
     if (!fs.existsSync(csvPath)) {
         return res.status(404).json({ error: 'Tweet dataset not found' });
     }

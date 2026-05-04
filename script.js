@@ -152,7 +152,7 @@ class ReflexChart {
         if (this.tweets.length > 0) return this.tweets;
 
         try {
-            const data = await d3.csv('data/ml/trump_tweets_topics.csv?v=' + Date.now());
+            const data = await d3.csv('processed_tweet/trump_tweets_topics.csv?v=' + Date.now());
             this.tweets = data
                 .map(d => ({
                     id: d.id,
@@ -261,11 +261,10 @@ class ReflexChart {
         }
 
         const possiblePaths = [
-            `local_data/${tickerSymbol}_60min.csv`,
-            `fetch_stock/${tickerSymbol}.csv`,
-            `fetch_stock/${tickerSymbol}_last_1mo.csv`,
-            `${tickerSymbol}_last_1mo.csv`,
+            `processed_stock/${tickerSymbol}.csv`,
+            `processed_stock/${tickerSymbol}_60min.csv`,
             `local_data/${tickerSymbol}.csv`,
+            `fetch_stock/${tickerSymbol}.csv`,
             `${tickerSymbol}.csv`
         ];
 
@@ -330,7 +329,7 @@ class ReflexChart {
     }
 
     async loadSp500IndexData() {
-        const rows = await d3.csv('local_data/sp500_index.csv');
+        const rows = await d3.csv('processed_stock/sp500_index.csv');
 
         return rows
             .map(row => {
@@ -1475,7 +1474,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function loadTopics() {
         try {
-            const res = await fetch('data/ml/topic_definitions.json');
+            const res = await fetch('processed_tweet/topic_definitions.json');
             if (res.ok) {
                 window.TOPIC_DEFINITIONS = await res.json();
                 if (window.updateWordCloud) window.updateWordCloud();
@@ -1634,13 +1633,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalFetchBtn.disabled = true;
 
         try {
-            const startYear = modalStartDateInput.value;
-            const endYear = modalEndDateInput.value;
-            
-            let url = `/api/fetch-stock?ticker=${ticker}`;
-            if (startYear) url += `&startYear=${startYear}`;
-            if (endYear) url += `&endYear=${endYear}`;
-
+            const year = document.getElementById('modal-year-select').value;
+            const url = `/api/fetch-stock?ticker=${ticker}&year=${year}`;
             const res = await fetch(url);
             
             // Check if response is JSON
