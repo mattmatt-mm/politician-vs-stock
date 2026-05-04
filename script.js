@@ -274,7 +274,8 @@ class ReflexChart {
             'came', 'take', 'took', 'know', 'knew', 'see', 'saw', 'want', 'back',
             'even', 'well', 'way', 'new', 'say', 'said', 'says', 'tell', 'told',
             'time', 'year', 'years', 'day', 'days', 'today', 'last', 'first',
-            'ever', 'never', 'always', 'still', 'already', 'really', 'being'
+            'ever', 'never', 'always', 'still', 'already', 'really', 'being',
+            'video', 'image', 'http', 'https', 'com', 'www', 'pic', 'twitter'
         ]);
 
         const freq = {};
