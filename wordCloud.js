@@ -261,7 +261,17 @@ document.addEventListener("DOMContentLoaded", () => {
                         style: { fontFamily: 'Inter, sans-serif', fontSize: '10px', fontWeight: '400' }
                     },
                     color: '#10B981',
-                    borderRadius: 2
+                    borderRadius: 2,
+                    cursor: 'pointer',
+                    point: {
+                        events: {
+                            click: function() {
+                                if (window.reflexChart) {
+                                    window.reflexChart.filterEventsByKeyword(this.category);
+                                }
+                            }
+                        }
+                    }
                 }
             },
             series: [{
