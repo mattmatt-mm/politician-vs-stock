@@ -167,7 +167,10 @@ class ReflexChart {
                     positivity: parseFloat(d.vader_positivity) || 0,
                     tbPolarity: parseFloat(d.textblob_polarity) || 0,
                     tbSubjectivity: parseFloat(d.textblob_subjectivity) || 0,
-                    combinedScore: parseFloat(d.combined_sentiment) || 0
+                    combinedScore: parseFloat(d.combined_sentiment) || 0,
+                    mappedTickers: d.mapped_tickers || '',
+                    tweetStockSignal: parseFloat(d.tweet_stock_signal) || 0,
+                    dominantTopicProb: parseFloat(d.dominant_topic_prob) || 1.0
                 }))
                 .filter(tweet => {
                     if (!tweet.date || Number.isNaN(tweet.date.getTime()) || tweet.deleted) return false;
@@ -1350,6 +1353,14 @@ class ReflexChart {
                     <div class="tweet-card-metric">
                         <span class="label">Impact Z-Score</span>
                         <span class="val">${event.reaction.zLabel}</span>
+                    </div>
+                    <div class="tweet-card-metric">
+                        <span class="label">Topic Signal</span>
+                        <span class="val">${event.tweetStockSignal !== undefined ? event.tweetStockSignal.toFixed(3) : 'N/A'}</span>
+                    </div>
+                    <div class="tweet-card-metric">
+                        <span class="label">Mapped Tickers</span>
+                        <span class="val">${event.mappedTickers || 'None'}</span>
                     </div>
                 </div>
             `;

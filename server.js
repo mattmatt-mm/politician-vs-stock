@@ -199,6 +199,40 @@ app.get('/api/stock-mentions', (req, res) => {
     res.json(mentions.slice(0, 50)); // Limit to top 50
 });
 
+/**
+ * API Endpoint to get aggregated topic-stock signals
+ * Returns sentiment signals grouped by topic and ticker
+ */
+app.get('/api/topic-stock-signals', (req, res) => {
+    const jsonPath = path.join(__dirname, 'data/ml/topic_stock_signals.json');
+    if (!fs.existsSync(jsonPath)) {
+        return res.status(404).json({ error: 'Topic stock signals not found. Run build_topic_stock_signals.py first.' });
+    }
+    try {
+        const data = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+        res.json(data);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to parse topic_stock_signals.json' });
+    }
+});
+
+/**
+ * API Endpoint to get term frequencies for bar chart
+ * Returns top 20 words with their counts
+ */
+app.get('/api/term-frequency', (req, res) => {
+    const jsonPath = path.join(__dirname, 'data/ml/term_frequency.json');
+    if (!fs.existsSync(jsonPath)) {
+        return res.status(404).json({ error: 'Term frequency data not found. Run compute_term_frequency.py first.' });
+    }
+    try {
+        const data = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+        res.json(data);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to parse term_frequency.json' });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`\n=================================================`);
     console.log(`🚀 Server running at http://localhost:${PORT}`);

@@ -7,6 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let currentMode = 'keywords';
     let keywordData = null;
     let stocksData = null;
+    let termFreqData = null;
     const container = document.getElementById('word-cloud-container');
     const modeSelector = document.getElementById('cloud-mode-selector');
     
@@ -39,9 +40,21 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (currentMode === 'stocks') renderCloud();
             })
             .catch(err => console.warn('Could not fetch stock mentions:', err));
+
+        fetch('/api/term-frequency')
+            .then(response => response.json())
+            .then(data => {
+                termFreqData = data;
+                if (currentMode === 'terms-bar') renderBarChart();
+            })
+            .catch(err => console.warn('Could not fetch term frequency:', err));
     }
 
     function renderCloud() {
+        if (currentMode === 'terms-bar') {
+            renderBarChart();
+            return;
+        }
         if (currentMode === 'keywords' && !keywordData) return;
         if (currentMode === 'stocks' && !stocksData) return;
 
@@ -188,6 +201,76 @@ document.addEventListener("DOMContentLoaded", () => {
             });
     }
 
+    function renderBarChart() {
+        // Clear D3 word cloud SVG
+        d3.select("#word-cloud-container svg").remove();
+
+        // Clear any existing Highcharts chart
+        const existingChart = Highcharts.charts.find(c => c && c.renderTo && c.renderTo.id === 'word-cloud-container');
+        if (existingChart) existingChart.destroy();
+
+        if (!termFreqData || Object.keys(termFreqData).length === 0) {
+            container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--zinc-500);">No term frequency data available. Run compute_term_frequency.py first.</div>';
+            return;
+        }
+
+        // Sort by frequency descending
+        const sortedWords = Object.entries(termFreqData)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 20);
+
+        Highcharts.chart('word-cloud-container', {
+            chart: {
+                type: 'bar',
+                height: container.clientHeight || 400,
+                backgroundColor: 'transparent'
+            },
+            title: { text: null },
+            xAxis: {
+                categories: sortedWords.map(w => w[0]),
+                title: { text: null },
+                labels: {
+                    style: {
+                        fontFamily: 'Inter, sans-serif',
+                        fontSize: '11px',
+                        color: 'var(--zinc-700)'
+                    }
+                }
+            },
+            yAxis: {
+                min: 0,
+                title: {
+                    text: 'Frequency',
+                    style: { fontFamily: 'Inter, sans-serif', fontSize: '11px' }
+                },
+                labels: {
+                    style: { fontFamily: 'Inter, sans-serif', fontSize: '10px' }
+                }
+            },
+            legend: { enabled: false },
+            credits: { enabled: false },
+            tooltip: {
+                formatter: function() {
+                    return `<b>${this.x}</b>: ${this.y.toLocaleString()} occurrences`;
+                }
+            },
+            plotOptions: {
+                bar: {
+                    dataLabels: {
+                        enabled: true,
+                        style: { fontFamily: 'Inter, sans-serif', fontSize: '10px', fontWeight: '400' }
+                    },
+                    color: '#10B981',
+                    borderRadius: 2
+                }
+            },
+            series: [{
+                name: 'Frequency',
+                data: sortedWords.map(w => w[1])
+            }]
+        });
+    }
+
     if (modeSelector) {
         modeSelector.addEventListener('change', (e) => {
             currentMode = e.target.value;
@@ -196,7 +279,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     window.addEventListener('resize', () => {
-        if (keywordData || stocksData) renderCloud();
+        if (keywordData || stocksData || termFreqData) renderCloud();
     });
 
     window.resetWordCloud = function() {

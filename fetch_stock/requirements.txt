@@ -1,2 +1,4 @@
 pandas
 yfinance
+pytest>=7.4.0
+nltk
