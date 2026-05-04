@@ -523,6 +523,12 @@ h2.display-header {
 .value-negative { color: var(--caution-red); }
 .value-neutral { color: var(--text-primary); }
 
+.impact-strong-negative { color: #9F1239; }
+.impact-negative { color: #E11D48; }
+.impact-neutral { color: var(--text-primary); }
+.impact-positive { color: #059669; }
+.impact-strong-positive { color: #065F46; }
+
 .tooltip-footer {
     font-size: 12px;
     color: var(--text-secondary);
@@ -757,41 +763,60 @@ h2.display-header {
     margin-bottom: 20px;
 }
 
-.fetch-input-group {
+.fetch-form {
     display: flex;
-    gap: 12px;
+    flex-direction: column;
+    gap: 16px;
     margin-bottom: 24px;
 }
 
-.fetch-input-group input {
+.form-row {
+    display: flex;
+    gap: 12px;
+}
+
+.form-group {
     flex: 1;
-    padding: 10px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-group label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--zinc-500);
+    font-weight: 700;
+}
+
+.form-group input, .modal-select {
+    width: 100%;
+    padding: 10px 12px;
     border: 1px solid var(--zinc-200);
     border-radius: var(--radius-sm);
     font-size: 14px;
     font-weight: 600;
     outline: none;
-    transition: border-color 0.2s;
+    transition: all 0.2s;
 }
 
-.fetch-input-group input:focus {
+.form-group input:focus, .modal-select:focus {
     border-color: var(--ink);
+    background: var(--zinc-50);
 }
 
-.primary-btn {
-    padding: 10px 20px;
-    background: var(--zinc-800);
-    color: #FFFFFF;
-    border: none;
-    border-radius: var(--radius-sm);
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: opacity 0.2s;
+.modal-select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2352525B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 32px;
 }
 
-.primary-btn:hover {
-    opacity: 0.9;
+.primary-btn.full-width {
+    width: 100%;
+    padding: 12px;
 }
 
 .modal-loader {
@@ -810,6 +835,11 @@ h2.display-header {
 .available-stocks-section label {
     display: block;
     margin-bottom: 12px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--zinc-500);
+    font-weight: 700;
 }
 
 .modal-stock-list {
@@ -817,7 +847,7 @@ h2.display-header {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     gap: 8px;
-    max-height: 200px;
+    max-height: 160px;
     overflow-y: auto;
     padding-right: 8px;
 }

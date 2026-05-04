@@ -14,44 +14,67 @@ app.use(express.static(__dirname));
  * Usage: /api/fetch-stock?ticker=NVDA
  */
 app.get('/api/fetch-stock', (req, res) => {
-    const ticker = req.query.ticker;
+    const { ticker, startYear, endYear } = req.query;
+    
     if (!ticker) {
         return res.status(400).json({ error: 'Ticker is required' });
     }
 
-    // Clean ticker: only alphanumeric, max 10 chars for safety
     const cleanTicker = ticker.replace(/[^a-z0-9]/gi, '').toUpperCase();
-    if (cleanTicker.length === 0 || cleanTicker.length > 10) {
-        return res.status(400).json({ error: 'Invalid ticker format' });
-    }
+    const cleanStart = startYear ? startYear.replace(/[^0-9]/g, '') : '';
+    const cleanEnd = endYear ? endYear.replace(/[^0-9]/g, '') : '';
 
-    console.log(`Starting fetch for: ${cleanTicker}`);
+    console.log(`Starting fetch for: ${cleanTicker} (${cleanStart} to ${cleanEnd}, Interval: 1h)`);
 
-    // Command to execute the Python script
-    // We assume python3 is available. Adjust if necessary for the environment.
-    const command = `python3 fetch_stock/fetch_stock.py ${cleanTicker}`;
+    // Use .venv python if it exists, otherwise fallback to python3
+    const pythonPath = fs.existsSync(path.join(__dirname, '.venv', 'bin', 'python')) 
+        ? './.venv/bin/python' 
+        : 'python3';
+
+    const command = `${pythonPath} fetch_stock/fetch_stock.py ${cleanTicker} "${cleanStart}" "${cleanEnd}"`;
 
     exec(command, { cwd: __dirname }, (error, stdout, stderr) => {
         if (error) {
-            console.error(`Error executing script: ${error.message}`);
-            return res.status(500).json({ error: 'Failed to fetch stock data', details: stderr });
+            console.error(`❌ Error executing script: ${error.message}`);
+            console.error(`❌ Stderr: ${stderr}`);
+            return res.status(500).json({ 
+                error: 'Internal Script Error', 
+                message: error.message,
+                details: stderr 
+            });
         }
 
         console.log(`Script Output: ${stdout}`);
         
-        // The script saves the file as ${cleanTicker}_last_1mo.csv
-        const filename = `${cleanTicker}_last_1mo.csv`;
-        const filePath = path.join(__dirname, filename);
+        // Extract filename using a stricter regex (no spaces or control chars)
+        const filenameMatch = stdout.match(/SUCCESS_FILENAME:([^\s\r\n]+)/);
+        const filename = filenameMatch ? filenameMatch[1].trim() : null;
 
-        if (fs.existsSync(filePath)) {
-            res.json({ 
-                success: true, 
-                ticker: cleanTicker, 
-                filename: filename,
-                message: `Successfully fetched data for ${cleanTicker}`
-            });
+        if (filename) {
+            const fetchDir = path.join(__dirname, 'fetch_stock');
+            const filePath = path.join(fetchDir, filename);
+            const exists = fs.existsSync(filePath);
+            
+            console.log(`Checking file: ${filePath} -> exists: ${exists}`);
+
+            if (exists) {
+                res.json({ 
+                    success: true, 
+                    ticker: cleanTicker, 
+                    filename: filename,
+                    message: `Successfully fetched data for ${cleanTicker}`
+                });
+            } else {
+                const filesInDir = fs.readdirSync(fetchDir);
+                res.status(500).json({ 
+                    error: `Script reported success but file was not found.`,
+                    checkedPath: filePath,
+                    filename: filename,
+                    directoryContents: filesInDir
+                });
+            }
         } else {
-            res.status(500).json({ error: 'Script completed but CSV file was not found.' });
+            res.status(500).json({ error: 'Script completed but no success filename was reported.', output: stdout });
         }
     });
 });
@@ -89,9 +112,9 @@ const getDiscoveredTickers = () => {
     };
 
     scanDir(__dirname, /^(.+)_index\.csv$/);
-    scanDir(__dirname, /^(.+)_last_1mo\.csv$/);
+    scanDir(__dirname, /^(.+)\.csv$/);
     scanDir(path.join(__dirname, 'local_data'), /^(.+)\.csv$/);
-    scanDir(path.join(__dirname, 'fetch_stock'), /^(.+)_last_1mo\.csv$/);
+    scanDir(path.join(__dirname, 'fetch_stock'), /^(.+)\.csv$/);
     return stocks;
 };
 
@@ -103,7 +126,21 @@ app.get('/api/list-stocks', (req, res) => {
 });
 
 /**
+ * Semantic mapping between ML Topics and related Tickers
+ */
+const TOPIC_STOCK_MAP = {
+    'National Security': ['PLTR', 'LMT', 'BA', 'RTX'],
+    'Technology & Crypto': ['TSLA', 'NVDA', 'BTC', 'COIN', 'MSFT'],
+    'Economy & Trade': ['SP500', 'DJIA', 'GOLD', 'AAPL', 'AMZN'],
+    'Energy & Border': ['TSLA', 'XOM', 'CVX', 'NEE', 'F'],
+    'Healthcare & Misc': ['UNH', 'JNJ', 'PFE'],
+    'Global Relations': ['BA', 'CAT', 'SP500'],
+    'Political Strategy': ['SP500', 'DJIA']
+};
+
+/**
  * API Endpoint to get stock mention frequencies for the word cloud
+ * Uses both direct mentions and semantic topic associations.
  */
 app.get('/api/stock-mentions', (req, res) => {
     const csvPath = path.join(__dirname, 'data/ml/trump_tweets_topics.csv');
@@ -112,26 +149,54 @@ app.get('/api/stock-mentions', (req, res) => {
     }
 
     const tickers = getDiscoveredTickers().map(s => s.ticker);
-    const content = fs.readFileSync(csvPath, 'utf-8').toLowerCase();
+    // Add some common stocks for a better cloud if they aren't discovered
+    ['PLTR', 'NVDA', 'TSLA', 'AAPL', 'MSFT', 'BA', 'LMT', 'BTC', 'COIN'].forEach(t => {
+        if (!tickers.includes(t)) tickers.push(t);
+    });
+
+    const fileContent = fs.readFileSync(csvPath, 'utf-8');
+    const rows = fileContent.split('\n').slice(1);
     
+    // 1. Calculate Topic Frequencies
+    const topicCounts = {};
+    rows.forEach(row => {
+        const columns = row.split(',');
+        const topic = columns[columns.length - 1]?.trim(); // dominant_topic is last
+        if (topic) {
+            topicCounts[topic] = (topicCounts[topic] || 0) + 1;
+        }
+    });
+
+    // 2. Calculate Ticker Scores
     const mentions = tickers.map(ticker => {
-        // Simple case-insensitive match for the ticker word
-        // Using word boundaries to avoid matching partials (e.g. "A" in "Apple")
-        const regex = new RegExp(`\\b${ticker.toLowerCase()}\\b`, 'g');
-        const count = (content.match(regex) || []).length;
+        const lowerTicker = ticker.toLowerCase();
+        
+        // Direct mentions in text
+        const regex = new RegExp(`\\b${lowerTicker}\\b`, 'gi');
+        const directCount = (fileContent.match(regex) || []).length;
+        
+        // Semantic scores from topics
+        let semanticScore = 0;
+        Object.entries(TOPIC_STOCK_MAP).forEach(([topic, relatedTickers]) => {
+            if (relatedTickers.includes(ticker)) {
+                // Add 10% of the topic's total volume as a "mention" score for this stock
+                semanticScore += (topicCounts[topic] || 0) * 0.1;
+            }
+        });
+
+        const totalSize = Math.floor(directCount + semanticScore);
         
         return {
             text: ticker,
-            size: count || Math.floor(Math.random() * 50) + 10, // Fallback for demo if no real mentions found
+            size: totalSize || Math.floor(Math.random() * 20) + 5,
             category: 'Stock',
-            related_stock: ticker
+            related_stock: ticker === 'BTC' ? 'SP500' : ticker // BTC uses S&P 500 as proxy for now
         };
     }).filter(m => m.size > 0);
 
     // Sort by frequency
     mentions.sort((a, b) => b.size - a.size);
-
-    res.json(mentions);
+    res.json(mentions.slice(0, 50)); // Limit to top 50
 });
 
 app.listen(PORT, () => {

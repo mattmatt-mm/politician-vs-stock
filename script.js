@@ -10,6 +10,9 @@ const MARKET_KEYWORDS = {
     NVDA: [
         'nvda', 'nvidia', 'chip', 'chips', 'semiconductor', 'ai',
         'blackwell', 'rubin', 'tariff', 'tariffs'
+    ],
+    TSLA: [
+        'tsla', 'tesla', 'musk', 'ev', 'electric', 'autonomous', 'fsd'
     ]
 };
 
@@ -38,6 +41,14 @@ const SENTIMENT_META = {
     neutral: { label: 'Neutral', color: '#A1A1AA', title: 'T' }
 };
 
+const IMPACT_BAND_META = {
+    'strong-negative': { label: 'Strong Negative', shortLabel: 'Strong Down' },
+    negative: { label: 'Negative', shortLabel: 'Down' },
+    neutral: { label: 'Neutral', shortLabel: 'Flat' },
+    positive: { label: 'Positive', shortLabel: 'Up' },
+    'strong-positive': { label: 'Strong Positive', shortLabel: 'Strong Up' }
+};
+
 const TWEET_YEAR_MIN = 2024;
 const TWEET_YEAR_MAX = 2025;
 
@@ -51,6 +62,7 @@ class ReflexChart {
         this.currentYear = '2025';
         this.currentStockData = [];
         this.currentEvents = [];
+        this.currentBenchmarkData = [];
         this.showVerticalLines = false;
         this.selectedEventId = null;
         this.currentWindowMs = null;
@@ -191,11 +203,19 @@ class ReflexChart {
             this.tweets = []; 
             await this.loadTweets();
             this.currentStockData = await this.loadStockData(normalizedTicker);
-            this.currentEvents = this.prepareTweetEvents(normalizedTicker, this.currentStockData);
+            this.currentBenchmarkData = this.isSp500Ticker(normalizedTicker)
+                ? []
+                : await this.loadSp500IndexData();
+            this.currentEvents = this.prepareTweetEvents(
+                normalizedTicker,
+                this.currentStockData,
+                this.currentBenchmarkData
+            );
 
             this.updateHeader(normalizedTicker);
             this.populateTweetStream(normalizedTicker, this.currentEvents);
-            await this.renderActiveChart();
+            // Force range reset when changing ticker or year to fix "sticky range" bug
+            await this.renderActiveChart(true);
         } catch (e) {
             console.error('Failed to update dashboard', e);
         }
@@ -242,13 +262,22 @@ class ReflexChart {
 
         const possiblePaths = [
             `local_data/${tickerSymbol}_60min.csv`,
+            `fetch_stock/${tickerSymbol}.csv`,
             `fetch_stock/${tickerSymbol}_last_1mo.csv`,
             `${tickerSymbol}_last_1mo.csv`,
             `local_data/${tickerSymbol}.csv`,
             `${tickerSymbol}.csv`
         ];
 
-        for (const path of possiblePaths) {
+        // Add discovered paths from the server
+        if (window.AVAILABLE_STOCKS) {
+            const discovered = window.AVAILABLE_STOCKS.filter(s => s.ticker === tickerSymbol).map(s => s.path);
+            possiblePaths.unshift(...discovered);
+        }
+
+        const uniquePaths = [...new Set(possiblePaths)];
+
+        for (const path of uniquePaths) {
             try {
                 const checkRes = await fetch(path, { method: 'HEAD' });
                 if (checkRes.ok) {
@@ -301,7 +330,7 @@ class ReflexChart {
     }
 
     async loadSp500IndexData() {
-        const rows = await d3.csv('sp500_index.csv');
+        const rows = await d3.csv('local_data/sp500_index.csv');
 
         return rows
             .map(row => {
@@ -430,7 +459,7 @@ class ReflexChart {
         return day < nthSunday(11, 1);
     }
 
-    prepareTweetEvents(ticker, stockData) {
+    prepareTweetEvents(ticker, stockData, benchmarkData = []) {
         if (!stockData.length) return [];
 
         const minTime = stockData[0].date.getTime();
@@ -445,19 +474,19 @@ class ReflexChart {
                 const content = tweet.text.toLowerCase();
                 return (MARKET_KEYWORDS[ticker] || []).some(keyword => content.includes(keyword));
             })
-            .map(tweet => this.enrichTweet(tweet, ticker, stockData))
+            .map(tweet => this.enrichTweet(tweet, ticker, stockData, benchmarkData))
             .sort((a, b) => a.date - b.date);
 
         return events.slice(-500); // Take the latest 500 for the selected year
     }
 
-    enrichTweet(tweet, ticker, stockData) {
+    enrichTweet(tweet, ticker, stockData, benchmarkData = []) {
         const sentiment = {
             direction: tweet.sentimentDirection,
             label: SENTIMENT_META[tweet.sentimentDirection].label,
             score: tweet.sentimentScore
         };
-        const reaction = this.calculatePostMove(tweet.date, stockData);
+        const reaction = this.calculatePostMove(tweet.date, stockData, benchmarkData);
 
         return {
             ...tweet,
@@ -468,27 +497,35 @@ class ReflexChart {
         };
     }
 
-    calculatePostMove(tweetDate, stockData) {
-        if (!stockData.length) return { label: 'n/a', value: null, direction: 'neutral' };
-
-        const tweetTime = tweetDate.getTime();
-        const startIndex = stockData.findIndex(candle => candle.date.getTime() >= tweetTime);
-        if (startIndex < 0) return { label: 'outside range', value: null, direction: 'neutral' };
+    calculatePostMove(tweetDate, stockData, benchmarkData = []) {
+        if (!stockData.length) return this.emptyReaction('n/a');
 
         const intervalMs = this.estimateIntervalMs(stockData);
         const targetMs = intervalMs <= 2 * 60 * 1000 ? 15 * 60 * 1000 : 3 * intervalMs;
-        const endTime = stockData[startIndex].date.getTime() + targetMs;
-        let endIndex = stockData.findIndex((candle, index) => index >= startIndex && candle.date.getTime() >= endTime);
-        if (endIndex < 0) endIndex = stockData.length - 1;
+        const horizonLabel = this.formatHorizonLabel(targetMs, intervalMs);
+        const moveWindow = this.calculateWindowReturn(tweetDate, stockData, targetMs);
 
-        const startClose = stockData[startIndex].close;
-        const endClose = stockData[endIndex].close;
-        const value = ((endClose - startClose) / startClose) * 100;
+        if (!moveWindow) return this.emptyReaction('outside range', horizonLabel);
+
+        const value = moveWindow.returnPct;
+        const zScore = this.calculateVolatilityAdjustedScore(stockData, moveWindow.startIndex, moveWindow.endIndex);
+        const abnormalReturn = this.canCalculateAbnormalReturn(stockData, benchmarkData)
+            ? this.calculateAbnormalReturn(tweetDate, targetMs, value, benchmarkData)
+            : null;
+        const impactBand = this.classifyImpactBand(value, zScore);
 
         return {
-            label: `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`,
+            label: this.formatPercent(value),
             value,
-            direction: value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral'
+            direction: value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral',
+            horizonLabel,
+            zScore,
+            zLabel: Number.isFinite(zScore) ? `${zScore >= 0 ? '+' : ''}${zScore.toFixed(2)}σ` : 'n/a',
+            abnormalReturn,
+            abnormalLabel: Number.isFinite(abnormalReturn) ? this.formatPercent(abnormalReturn) : 'n/a',
+            impactBand,
+            impactLabel: IMPACT_BAND_META[impactBand].label,
+            impactShortLabel: IMPACT_BAND_META[impactBand].shortLabel
         };
     }
 
@@ -501,6 +538,108 @@ class ReflexChart {
         }
 
         return gaps.sort((a, b) => a - b)[Math.floor(gaps.length / 2)] || 60 * 1000;
+    }
+
+    emptyReaction(label, horizonLabel = 'n/a') {
+        return {
+            label,
+            value: null,
+            direction: 'neutral',
+            horizonLabel,
+            zScore: null,
+            zLabel: 'n/a',
+            abnormalReturn: null,
+            abnormalLabel: 'n/a',
+            impactBand: 'neutral',
+            impactLabel: IMPACT_BAND_META.neutral.label,
+            impactShortLabel: IMPACT_BAND_META.neutral.shortLabel
+        };
+    }
+
+    calculateWindowReturn(targetDate, stockData, targetMs) {
+        const targetTime = targetDate.getTime();
+        const startIndex = stockData.findIndex(candle => candle.date.getTime() >= targetTime);
+        if (startIndex < 0) return null;
+
+        const endTime = stockData[startIndex].date.getTime() + targetMs;
+        let endIndex = stockData.findIndex((candle, index) => index >= startIndex && candle.date.getTime() >= endTime);
+        if (endIndex < 0) endIndex = stockData.length - 1;
+        if (endIndex <= startIndex) return null;
+
+        const startClose = stockData[startIndex].close;
+        const endClose = stockData[endIndex].close;
+        if (!Number.isFinite(startClose) || !Number.isFinite(endClose) || startClose === 0) return null;
+
+        return {
+            startIndex,
+            endIndex,
+            returnPct: ((endClose - startClose) / startClose) * 100
+        };
+    }
+
+    calculateVolatilityAdjustedScore(stockData, startIndex, endIndex) {
+        const lookback = 20;
+        const step = Math.max(1, endIndex - startIndex);
+        if (startIndex < step) return null;
+
+        const sample = [];
+        for (let i = startIndex; i >= step && sample.length < lookback; i -= 1) {
+            const earlier = stockData[i - step]?.close;
+            const later = stockData[i]?.close;
+            if (!Number.isFinite(earlier) || !Number.isFinite(later) || earlier === 0) continue;
+            sample.push(((later - earlier) / earlier) * 100);
+        }
+
+        if (sample.length < 5) return null;
+
+        const mean = sample.reduce((sum, value) => sum + value, 0) / sample.length;
+        const variance = sample.reduce((sum, value) => sum + ((value - mean) ** 2), 0) / sample.length;
+        const volatility = Math.sqrt(variance);
+        if (!Number.isFinite(volatility) || volatility < 0.01) return null;
+
+        const currentMove = ((stockData[endIndex].close - stockData[startIndex].close) / stockData[startIndex].close) * 100;
+        return currentMove / volatility;
+    }
+
+    canCalculateAbnormalReturn(stockData, benchmarkData) {
+        if (!stockData.length || !benchmarkData.length) return false;
+        const stockInterval = this.estimateIntervalMs(stockData);
+        const benchmarkInterval = this.estimateIntervalMs(benchmarkData);
+        const ratio = Math.max(stockInterval, benchmarkInterval) / Math.max(1, Math.min(stockInterval, benchmarkInterval));
+        return ratio <= 2;
+    }
+
+    calculateAbnormalReturn(tweetDate, targetMs, stockReturn, benchmarkData) {
+        const benchmarkMove = this.calculateWindowReturn(tweetDate, benchmarkData, targetMs);
+        if (!benchmarkMove) return null;
+        return stockReturn - benchmarkMove.returnPct;
+    }
+
+    classifyImpactBand(rawReturn, zScore) {
+        if (Number.isFinite(zScore)) {
+            if (zScore <= -2) return 'strong-negative';
+            if (zScore <= -0.5) return 'negative';
+            if (zScore < 0.5) return 'neutral';
+            if (zScore < 2) return 'positive';
+            return 'strong-positive';
+        }
+
+        if (rawReturn <= -1) return 'strong-negative';
+        if (rawReturn <= -0.2) return 'negative';
+        if (rawReturn < 0.2) return 'neutral';
+        if (rawReturn < 1) return 'positive';
+        return 'strong-positive';
+    }
+
+    formatPercent(value) {
+        if (!Number.isFinite(value)) return 'n/a';
+        return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+    }
+
+    formatHorizonLabel(targetMs, intervalMs) {
+        if (intervalMs <= 2 * 60 * 1000) return '15m';
+        const steps = Math.max(1, Math.round(targetMs / intervalMs));
+        return `${steps} candles`;
     }
 
     updateHeader(tickerSymbol) {
@@ -520,17 +659,33 @@ class ReflexChart {
         subtitle.textContent = `${yearLabel} ${timeframe} candles with Trump tweet timestamps. Drag to pan time. Engine: ${engineName}.`;
     }
 
-    async renderActiveChart() {
+    async renderActiveChart(forceResetRange = false) {
         this.updateHeader(this.currentTicker);
         this.toggleEngineContainers();
 
+        // Capture current range to prevent "zoom jump" ONLY if not forcing a reset
+        let range = null;
+        if (!forceResetRange) {
+            if (this.chartEngine === 'highcharts' && this.highChart) {
+                const axis = this.highChart.xAxis[0];
+                if (axis.min && axis.max) {
+                    range = { min: axis.min, max: axis.max };
+                }
+            } else if (this.chartEngine === 'scichart' && this.xAxis && this.xAxis.visibleRange) {
+                range = { 
+                    min: this.xAxis.visibleRange.min * 1000, 
+                    max: this.xAxis.visibleRange.max * 1000 
+                };
+            }
+        }
+
         if (this.chartEngine === 'highcharts') {
-            this.renderHighcharts(this.currentTicker, this.currentStockData, this.currentEvents);
+            this.renderHighcharts(this.currentTicker, this.currentStockData, this.currentEvents, range);
             return;
         }
 
         await this.sciChartInitPromise;
-        this.renderSciChart(this.currentTicker, this.currentStockData, this.currentEvents);
+        this.renderSciChart(this.currentTicker, this.currentStockData, this.currentEvents, range);
     }
 
     toggleEngineContainers() {
@@ -546,7 +701,7 @@ class ReflexChart {
         }
     }
 
-    renderSciChart(ticker, data, events) {
+    renderSciChart(ticker, data, events, preservedRange = null) {
         if (!this.sciChartSurface) return;
         
         if (!data.length) {
@@ -556,7 +711,7 @@ class ReflexChart {
         }
 
         if (this.isSp500Ticker(ticker)) {
-            this.renderSciChartLine(ticker, data, events);
+            this.renderSciChartLine(ticker, data, events, preservedRange);
             return;
         }
 
@@ -626,10 +781,10 @@ class ReflexChart {
             }
         });
 
-        this.applyInitialSciChartRange(data);
+        this.applyInitialSciChartRange(data, preservedRange);
     }
 
-    renderSciChartLine(ticker, data, events) {
+    renderSciChartLine(ticker, data, events, preservedRange = null) {
         if (!this.sciChartSurface || !data.length) return;
 
         const {
@@ -690,11 +845,17 @@ class ReflexChart {
             }
         });
 
-        this.applyInitialSciChartRange(data);
+        this.applyInitialSciChartRange(data, preservedRange);
     }
 
-    applyInitialSciChartRange(data) {
+    applyInitialSciChartRange(data, preservedRange = null) {
         if (!this.xAxis || !data.length) return;
+
+        if (preservedRange) {
+            this.xAxis.visibleRange = new SciChart.NumberRange(preservedRange.min / 1000, preservedRange.max / 1000);
+            this.currentWindowMs = preservedRange.max - preservedRange.min;
+            return;
+        }
 
         const min = Math.floor(data[0].date.getTime() / 1000);
         const max = Math.floor(data[data.length - 1].date.getTime() / 1000);
@@ -710,7 +871,7 @@ class ReflexChart {
         }
     }
 
-    renderHighcharts(ticker, data, events) {
+    renderHighcharts(ticker, data, events, preservedRange = null) {
         const highchartsNode = document.getElementById(this.highchartsContainerId);
         if (!window.Highcharts || !highchartsNode) return;
 
@@ -722,7 +883,7 @@ class ReflexChart {
         }
 
         if (this.isSp500Ticker(ticker)) {
-            this.renderHighchartsLine(ticker, data, events);
+            this.renderHighchartsLine(ticker, data, events, preservedRange);
             return;
         }
 
@@ -736,7 +897,8 @@ class ReflexChart {
         const visibleEvents = this.eventsInDataRange(events, data);
         const defaultWindow = this.defaultWindowMs(data);
         const max = data[data.length - 1].date.getTime();
-        const min = Math.max(data[0].date.getTime(), max - defaultWindow);
+        const min = preservedRange ? preservedRange.min : Math.max(data[0].date.getTime(), max - defaultWindow);
+        const actualMax = preservedRange ? preservedRange.max : max;
 
         if (this.highChart) {
             this.highChart.destroy();
@@ -768,7 +930,7 @@ class ReflexChart {
             legend: { enabled: false },
             xAxis: {
                 min,
-                max,
+                max: actualMax,
                 ordinal: false,
                 crosshair: true,
                 lineColor: '#E4E4E7',
@@ -837,6 +999,14 @@ class ReflexChart {
                     shape: 'circlepin',
                     y: -34,
                     allowOverlapX: true,
+                    cursor: 'pointer',
+                    point: {
+                        events: {
+                            click: (e) => {
+                                if (e.point.id) this.highlightTweetInStream(e.point.id);
+                            }
+                        }
+                    },
                     style: {
                         color: '#FFFFFF',
                         fontSize: '10px',
@@ -859,11 +1029,12 @@ class ReflexChart {
         this.reflowActiveChart();
     }
 
-    renderHighchartsLine(ticker, data, events) {
+    renderHighchartsLine(ticker, data, events, preservedRange = null) {
         const visibleEvents = this.eventsInDataRange(events, data);
         const defaultWindow = this.defaultWindowMs(data);
         const max = data[data.length - 1].date.getTime();
-        const min = Math.max(data[0].date.getTime(), max - defaultWindow);
+        const min = preservedRange ? preservedRange.min : Math.max(data[0].date.getTime(), max - defaultWindow);
+        const actualMax = preservedRange ? preservedRange.max : max;
         const lineData = this.withLineBreaks(data).map(point => [
             point.date.getTime(),
             point.break ? null : point.close
@@ -899,7 +1070,7 @@ class ReflexChart {
             legend: { enabled: false },
             xAxis: {
                 min,
-                max,
+                max: actualMax,
                 ordinal: false,
                 crosshair: true,
                 lineColor: '#E4E4E7',
@@ -995,8 +1166,9 @@ class ReflexChart {
                     .filter(event => event.sentiment.direction === direction)
                     .map(event => ({
                         x: event.date.getTime(),
+                        id: event.id, // For bi-directional linking
                         title: '', // No text label
-                        text: `${meta.label} tweet<br>${this.escapeHtml(event.text)}<br>Post move: ${event.reaction.label}`,
+                        text: `${meta.label} tweet<br>${this.escapeHtml(event.text)}<br>Move: ${event.reaction.label} (${event.reaction.horizonLabel})<br>Impact: ${event.reaction.impactLabel}${event.reaction.abnormalReturn !== null ? `<br>Excess vs S&P: ${event.reaction.abnormalLabel}` : ''}`,
                         fillColor: (this.selectedEventId && event.id === this.selectedEventId) ? meta.color : meta.color + '80'
                     }));
 
@@ -1081,7 +1253,9 @@ class ReflexChart {
 
         if (this.chartEngine === 'highcharts' && this.highChart) {
             const axis = this.highChart.xAxis[0];
-            const span = this.currentWindowMs || (axis.max - axis.min);
+            const currentSpan = axis.max - axis.min;
+            // Use 60 minute window (30m each side) or current window if it's smaller than full range
+            const span = (currentSpan > 0 && currentSpan < (axis.dataMax - axis.dataMin)) ? currentSpan : 3600000;
             axis.setExtremes(targetMs - span / 2, targetMs + span / 2, true, false);
             this.currentWindowMs = span;
             return;
@@ -1127,9 +1301,11 @@ class ReflexChart {
             const timeStr = d3.timeFormat('%b %d, %Y %H:%M')(event.date);
             const sentimentClass = `sentiment-${event.sentiment.direction}`;
             const reactionClass = `value-${event.reaction.direction}`;
+            const impactClass = `impact-${event.reaction.impactBand}`;
 
             const card = document.createElement('div');
             card.className = `tweet-card ${sentimentClass}`;
+            card.setAttribute('data-event-id', event.id);
             card.innerHTML = `
                 <div class="tweet-card-header">
                     <div class="time-cluster">
@@ -1147,24 +1323,39 @@ class ReflexChart {
                         <span class="val ${reactionClass}">${event.reaction.label}</span>
                     </div>
                     <div class="tweet-card-metric">
-                        <span class="label">Polarity</span>
-                        <span class="val">${event.tbPolarity.toFixed(2)}</span>
+                        <span class="label">Impact</span>
+                        <span class="val ${impactClass}">${event.reaction.impactShortLabel}</span>
                     </div>
                     <div class="tweet-card-metric">
-                        <span class="label">Subjectivity</span>
-                        <span class="val">${(event.tbSubjectivity * 100).toFixed(0)}%</span>
+                        <span class="label">Excess vs S&P</span>
+                        <span class="val">${event.reaction.abnormalLabel}</span>
+                    </div>
+                    <div class="tweet-card-metric">
+                        <span class="label">Horizon</span>
+                        <span class="val">${event.reaction.horizonLabel}</span>
+                    </div>
+                    <div class="tweet-card-metric">
+                        <span class="label">Polarity</span>
+                        <span class="val">${event.tbPolarity.toFixed(2)}</span>
                     </div>
                     <div class="tweet-card-metric">
                         <span class="label">Positivity</span>
                         <span class="val">${(event.positivity * 100).toFixed(0)}%</span>
                     </div>
+                    <div class="tweet-card-metric">
+                        <span class="label">Impact Z-Score</span>
+                        <span class="val">${event.reaction.zLabel}</span>
+                    </div>
                 </div>
             `;
 
             card.addEventListener('click', () => {
+                this.selectedEventId = event.id;
+                
+                // Highlight visually
                 document.querySelectorAll('.tweet-card').forEach(c => c.classList.remove('active'));
                 card.classList.add('active');
-                this.selectedEventId = event.id;
+                
                 this.panToDate(event.date);
                 this.renderActiveChart();
             });
@@ -1175,6 +1366,30 @@ class ReflexChart {
         if (window.lucide) {
             lucide.createIcons();
         }
+    }
+
+    highlightTweetInStream(eventId) {
+        this.selectedEventId = String(eventId);
+        
+        // Find the card in the DOM
+        const card = document.querySelector(`.tweet-card[data-event-id="${this.selectedEventId}"]`);
+        const container = document.getElementById('tweet-stream-container');
+        
+        if (card && container) {
+            // Highlight visually
+            document.querySelectorAll('.tweet-card').forEach(c => c.classList.remove('active'));
+            card.classList.add('active');
+            
+            // Scroll to the card
+            const topPos = card.offsetTop - container.offsetTop;
+            container.scrollTo({
+                top: topPos,
+                behavior: 'smooth'
+            });
+        }
+        
+        // Refresh chart to show the new highlight line
+        this.renderActiveChart();
     }
 
     filterEventsByTopic(topicName) {
@@ -1286,6 +1501,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const modalStockList = document.getElementById('modal-stock-list');
     const engineSelector = document.getElementById('chart-engine-selector');
     const yearSelector = document.getElementById('year-selector');
+    const modalStartDateInput = document.getElementById('modal-start-year');
+    const modalEndDateInput = document.getElementById('modal-end-year');
 
     let selectedTicker = 'SP500';
 
@@ -1417,10 +1634,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalFetchBtn.disabled = true;
 
         try {
-            const res = await fetch(`/api/fetch-stock?ticker=${ticker}`);
+            const startYear = modalStartDateInput.value;
+            const endYear = modalEndDateInput.value;
+            
+            let url = `/api/fetch-stock?ticker=${ticker}`;
+            if (startYear) url += `&startYear=${startYear}`;
+            if (endYear) url += `&endYear=${endYear}`;
+
+            const res = await fetch(url);
+            
+            // Check if response is JSON
+            const contentType = res.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+                const text = await res.text();
+                console.error('Non-JSON response received:', text);
+                throw new Error('Server returned an invalid response (HTML). Please ensure you are using port 3001 and not 3000.');
+            }
+
             const data = await res.json();
             
-            if (!res.ok) throw new Error(data.error || 'Fetch failed');
+            if (!res.ok) {
+                let errorMsg = data.error || data.message || 'Fetch failed';
+                if (data.checkedPath) {
+                    errorMsg += `\n\nSearched at: ${data.checkedPath}\nFilename: ${data.filename}`;
+                }
+                throw new Error(errorMsg);
+            }
 
             // Success: Add to list
             await refreshStockList();
