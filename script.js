@@ -69,6 +69,8 @@ class ReflexChart {
         this.selectedEventId = null;
         this.currentWindowMs = null;
         this.highlightedTicker = null;
+        this.impactGraph = new RelationshipGraph('impact-graph-container');
+        this.stockNetwork = new StockNetwork('stock-network-container');
 
         this.sciChartSurface = null;
         this.wasmContext = null;
@@ -217,6 +219,15 @@ class ReflexChart {
 
             this.updateHeader(normalizedTicker);
             this.populateTweetStream(normalizedTicker, this.currentEvents);
+            
+            // Update graph if it's visible
+            if (document.getElementById('impact-graph-container').style.display !== 'none') {
+                this.renderImpactGraph();
+            }
+            if (document.getElementById('stock-network-container').style.display !== 'none') {
+                this.renderStockNetwork();
+            }
+
             // Force range reset when changing ticker or year to fix "sticky range" bug
             await this.renderActiveChart(true);
         } catch (e) {
@@ -515,6 +526,7 @@ class ReflexChart {
         if (!moveWindow) return this.emptyReaction('outside range', horizonLabel);
 
         const value = moveWindow.returnPct;
+        const volumeImpact = moveWindow.volumeMultiplier;
         const zScore = this.calculateVolatilityAdjustedScore(stockData, moveWindow.startIndex, moveWindow.endIndex);
         const abnormalReturn = this.canCalculateAbnormalReturn(stockData, benchmarkData)
             ? this.calculateAbnormalReturn(tweetDate, targetMs, value, benchmarkData)
@@ -524,6 +536,7 @@ class ReflexChart {
         return {
             label: this.formatPercent(value),
             value,
+            volumeImpact,
             direction: value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral',
             horizonLabel,
             zScore,
@@ -577,10 +590,18 @@ class ReflexChart {
         const endClose = stockData[endIndex].close;
         if (!Number.isFinite(startClose) || !Number.isFinite(endClose) || startClose === 0) return null;
 
+        // Volume Impact calculation
+        const eventVolume = stockData[startIndex].volume || 0;
+        const lookback = 20;
+        const prevVolumes = stockData.slice(Math.max(0, startIndex - lookback), startIndex).map(d => d.volume || 0);
+        const avgVolume = prevVolumes.length > 0 ? prevVolumes.reduce((a, b) => a + b, 0) / prevVolumes.length : eventVolume;
+        const volumeMultiplier = avgVolume > 0 ? eventVolume / avgVolume : 1.0;
+
         return {
             startIndex,
             endIndex,
-            returnPct: ((endClose - startClose) / startClose) * 100
+            returnPct: ((endClose - startClose) / startClose) * 100,
+            volumeMultiplier
         };
     }
 
@@ -1344,6 +1365,193 @@ class ReflexChart {
         }, data[0]);
     }
 
+    scrollToTweet(id) {
+        const container = document.getElementById('tweet-stream-container');
+        const card = container.querySelector(`[data-id="${id}"]`);
+        if (card) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            card.classList.add('pulse');
+            setTimeout(() => card.classList.remove('pulse'), 2000);
+            this.selectedEventId = id;
+            this.renderActiveChart();
+        }
+    }
+
+    renderImpactGraph(metric = 'impact') {
+        const data = this.getGraphData();
+        this.impactGraph.render(data, metric);
+    }
+
+    getGraphData() {
+        const STOP_WORDS = new Set(['the', 'and', 'for', 'this', 'that', 'with', 'from', 'have', 'been', 'will', 'are', 'was', 'were', 'our', 'has', 'your', 'their', 'they', 'into', 'over', 'more', 'about', 'just', 'very', 'only', 'than', 'could', 'should', 'would']);
+        const nodes = [];
+        const links = [];
+        const wordNodes = new Map();
+        
+        // Filter tweets with volume data
+        const impactfulTweets = this.currentEvents
+            .filter(e => e.reaction && e.reaction.volumeImpact !== undefined)
+            .sort((a, b) => b.reaction.volumeImpact - a.reaction.volumeImpact)
+            .slice(0, 15); // Top 15 most impactful for clarity
+
+        impactfulTweets.forEach(tweet => {
+            const tweetId = `tweet-${tweet.id}`;
+            const impact = tweet.reaction.volumeImpact || 1;
+            
+            nodes.push({
+                id: tweetId,
+                type: 'tweet',
+                sentiment: tweet.sentiment.direction,
+                fullText: tweet.text,
+                impactScore: impact,
+                size: 6 + (Math.min(impact, 5) * 4)
+            });
+
+            const words = tweet.text.toLowerCase()
+                .replace(/[^\w\s]/gi, '')
+                .split(' ')
+                .filter(w => w.length > 3 && !STOP_WORDS.has(w));
+
+            const uniqueWords = [...new Set(words)];
+            uniqueWords.forEach(word => {
+                if (!wordNodes.has(word)) {
+                    wordNodes.set(word, {
+                        id: word,
+                        type: 'word',
+                        count: 0,
+                        impactScore: 0,
+                        size: 8
+                    });
+                }
+                const wordNode = wordNodes.get(word);
+                wordNode.count += 1;
+                wordNode.impactScore += impact;
+                wordNode.size += 2;
+
+                links.push({
+                    source: tweetId,
+                    target: word,
+                    value: 2
+                });
+            });
+        });
+
+        nodes.push(...Array.from(wordNodes.values()));
+        return { nodes, links };
+    }
+
+    async renderStockNetwork() {
+        const data = await this.getStockNetworkData();
+        this.stockNetwork.render(data);
+    }
+
+    async getStockNetworkData() {
+        const centerTicker = this.currentTicker;
+        const nodes = [{ id: centerTicker, isCenter: true }];
+        const links = [];
+        const seenNodes = new Set([centerTicker]);
+
+        // 1. Topic-based relationships
+        const topicMap = {
+            'National Security': ['PLTR', 'LMT', 'BA', 'RTX'],
+            'Technology & Crypto': ['TSLA', 'NVDA', 'BTC', 'COIN', 'MSFT'],
+            'Economy & Trade': ['SP500', 'DJIA', 'GOLD', 'AAPL', 'AMZN'],
+            'Energy & Border': ['TSLA', 'XOM', 'CVX', 'NEE', 'F'],
+            'Healthcare & Misc': ['UNH', 'JNJ', 'PFE'],
+            'Global Relations': ['BA', 'CAT', 'SP500'],
+            'Political Strategy': ['SP500', 'DJIA']
+        };
+
+        const centerTopics = Object.entries(topicMap)
+            .filter(([topic, tickers]) => tickers.includes(centerTicker))
+            .map(([topic]) => topic);
+
+        centerTopics.forEach(topic => {
+            topicMap[topic].forEach(ticker => {
+                if (ticker !== centerTicker && window.AVAILABLE_STOCKS.some(s => s.ticker === ticker)) {
+                    if (!seenNodes.has(ticker)) {
+                        nodes.push({ id: ticker, isCenter: false });
+                        seenNodes.add(ticker);
+                    }
+                    links.push({
+                        source: centerTicker,
+                        target: ticker,
+                        reason: `Related via ${topic}`
+                    });
+                }
+            });
+        });
+
+        // 2. Statistical Correlation (Pearson)
+        // We only do this for a subset of peers to keep it fast
+        const potentialPeers = window.AVAILABLE_STOCKS
+            .filter(s => !seenNodes.has(s.ticker))
+            .slice(0, 5);
+
+        for (const peer of potentialPeers) {
+            const correlation = await this.calculateCorrelation(centerTicker, peer.ticker);
+            if (correlation > 0.5) {
+                nodes.push({ id: peer.ticker, isCenter: false });
+                seenNodes.add(peer.ticker);
+                links.push({
+                    source: centerTicker,
+                    target: peer.ticker,
+                    reason: `High Correlation (${(correlation * 100).toFixed(0)}%)`
+                });
+            }
+        }
+
+        // Fallback
+        if (nodes.length === 1) {
+            window.AVAILABLE_STOCKS.slice(0, 5).forEach(s => {
+                if (s.ticker !== centerTicker && !seenNodes.has(s.ticker)) {
+                    nodes.push({ id: s.ticker, isCenter: false });
+                    seenNodes.add(s.ticker);
+                    links.push({ source: centerTicker, target: s.ticker, reason: "Market Peer" });
+                }
+            });
+        }
+
+        return { nodes, links };
+    }
+
+    async calculateCorrelation(t1, t2) {
+        try {
+            const d1 = await this.loadStockData(t1);
+            const d2 = await this.loadStockData(t2);
+            
+            // Align dates
+            const prices1 = [];
+            const prices2 = [];
+            const map2 = new Map(d2.map(d => [d.date.getTime(), d.close]));
+            
+            d1.forEach(p => {
+                const p2 = map2.get(p.date.getTime());
+                if (p2 !== undefined) {
+                    prices1.push(p.close);
+                    prices2.push(p2);
+                }
+            });
+
+            if (prices1.length < 10) return 0;
+
+            // Pearson Correlation
+            const n = prices1.length;
+            const sum1 = d3.sum(prices1);
+            const sum2 = d3.sum(prices2);
+            const sum1Sq = d3.sum(prices1.map(x => x * x));
+            const sum2Sq = d3.sum(prices2.map(x => x * x));
+            const pSum = d3.sum(prices1.map((x, i) => x * prices2[i]));
+
+            const num = pSum - (sum1 * sum2 / n);
+            const den = Math.sqrt((sum1Sq - (sum1 * sum1 / n)) * (sum2Sq - (sum2 * sum2 / n)));
+
+            return den === 0 ? 0 : num / den;
+        } catch (e) {
+            return 0;
+        }
+    }
+
     defaultWindowMs(data) {
         if (data.length < 2) return 90 * 60 * 1000;
         const interval = this.estimateIntervalMs(data);
@@ -1867,4 +2075,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.addEventListener('resize', () => {
         window.reflexChart.reflowActiveChart();
     });
+    window.switchCloudTab = (tab) => {
+        const cloudContainer = document.getElementById('word-cloud-container');
+        const graphContainer = document.getElementById('impact-graph-container');
+        const networkContainer = document.getElementById('stock-network-container');
+        const metricContainer = document.getElementById('graph-metric-container');
+        const subtitle = document.getElementById('cloud-subtitle');
+
+        // Hide all
+        cloudContainer.style.display = 'none';
+        graphContainer.style.display = 'none';
+        networkContainer.style.display = 'none';
+        metricContainer.style.display = 'none';
+
+        if (tab === 'cloud') {
+            cloudContainer.style.display = 'block';
+            subtitle.innerText = 'Click a keyword to pivot the sector chart';
+        } else if (tab === 'graph') {
+            graphContainer.style.display = 'block';
+            metricContainer.style.display = 'flex';
+            subtitle.innerText = 'Analyzing word-tweet relationships based on volume impact';
+            const metric = document.getElementById('graph-metric-selector')?.value || 'impact';
+            window.reflexChart.renderImpactGraph(metric);
+        } else if (tab === 'stocks') {
+            networkContainer.style.display = 'block';
+            subtitle.innerText = 'Exploring company relationships and market dependencies';
+            window.reflexChart.renderStockNetwork();
+        }
+    };
+
+    const graphMetricSelector = document.getElementById('graph-metric-selector');
+    if (graphMetricSelector) {
+        graphMetricSelector.addEventListener('change', (e) => {
+            window.reflexChart.renderImpactGraph(e.target.value);
+        });
+    }
 });

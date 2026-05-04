@@ -191,7 +191,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (modeSelector) {
         modeSelector.addEventListener('change', (e) => {
             currentMode = e.target.value;
-            renderCloud();
+            if (currentMode === 'graph' || currentMode === 'stocks') {
+                if (window.switchCloudTab) window.switchCloudTab(currentMode);
+            } else {
+                if (window.switchCloudTab) window.switchCloudTab('cloud');
+                renderCloud();
+            }
         });
     }
 
