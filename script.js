@@ -940,7 +940,7 @@ class ReflexChart {
                     const isSelected = this.selectedEventId && event.id === this.selectedEventId;
                     return {
                         value: event.date.getTime(),
-                        color: SENTIMENT_META[event.sentiment.direction].color + (isSelected ? '' : '33'),
+                        color: SENTIMENT_META[event.sentiment.direction].color + (isSelected ? '' : 'B3'),
                         width: isSelected ? 2 : 1,
                         zIndex: isSelected ? 5 : 1
                     };
@@ -1080,7 +1080,7 @@ class ReflexChart {
                     const isSelected = this.selectedEventId && event.id === this.selectedEventId;
                     return {
                         value: event.date.getTime(),
-                        color: SENTIMENT_META[event.sentiment.direction].color + (isSelected ? '' : '33'),
+                        color: SENTIMENT_META[event.sentiment.direction].color + (isSelected ? '' : 'B3'),
                         width: isSelected ? 2 : 1,
                         zIndex: isSelected ? 5 : 1
                     };
@@ -1464,6 +1464,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const data = await res.json();
                 if (Array.isArray(data) && data.length > 0) {
                     availableStocks = data;
+                    console.log('✅ Stock list refreshed:', availableStocks.length, 'tickers found.');
+                    // Trigger UI updates if elements exist
+                    if (typeof renderOptions === 'function') renderOptions();
+                    if (typeof renderModalStockList === 'function') renderModalStockList();
                 }
             }
         } catch (e) {
@@ -1484,9 +1488,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    await refreshStockList();
-    await loadTopics();
-    window.refreshStockList = refreshStockList;
+
 
     // DOM Elements
     const combobox = document.getElementById('stock-combobox');
@@ -1508,7 +1510,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // UI: Modal Logic
     const openModal = () => {
         modalOverlay.style.display = 'flex';
-        renderModalStockList();
+        renderModalStockList(); // Ensure list is fresh
         modalTickerInput.focus();
         list.style.display = 'none';
         combobox.classList.remove('open');
@@ -1633,8 +1635,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalFetchBtn.disabled = true;
 
         try {
-            const year = document.getElementById('modal-year-select').value;
-            const url = `/api/fetch-stock?ticker=${ticker}&year=${year}`;
+            const url = `/api/fetch-stock?ticker=${ticker}`;
             const res = await fetch(url);
             
             // Check if response is JSON
@@ -1675,6 +1676,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // Initial Load
+    window.refreshStockList = refreshStockList;
+    await refreshStockList();
+    await loadTopics();
+    renderOptions(); // Populate the dropdown
+    
     // Handle initial selection
     await selectTicker('SP500', 'S&P 500 Index');
 

@@ -14,23 +14,22 @@ app.use(express.static(__dirname));
  * Usage: /api/fetch-stock?ticker=NVDA
  */
 app.get('/api/fetch-stock', (req, res) => {
-    const { ticker, year } = req.query;
+    const { ticker } = req.query;
     
     if (!ticker) {
         return res.status(400).json({ error: 'Ticker is required' });
     }
 
     const cleanTicker = ticker.replace(/[^a-z0-9]/gi, '').toUpperCase();
-    const cleanYear = year ? year.replace(/[^0-9]/g, '') : new Date().getFullYear().toString();
 
-    console.log(`Starting Yearly fetch for: ${cleanTicker} (Year: ${cleanYear}, Interval: 1h)`);
+    console.log(`Starting Hybrid fetch for: ${cleanTicker} (2019-Now, Combined Daily/Hourly)`);
 
     // Use .venv python if it exists, otherwise fallback to python3
     const pythonPath = fs.existsSync(path.join(__dirname, '.venv', 'bin', 'python')) 
         ? './.venv/bin/python' 
         : 'python3';
 
-    const command = `${pythonPath} fetch_stock/fetch_stock_v2.py ${cleanTicker} ${cleanYear}`;
+    const command = `${pythonPath} fetch_stock/fetch_stock_v2.py ${cleanTicker}`;
 
     exec(command, { cwd: __dirname }, (error, stdout, stderr) => {
         if (error) {
@@ -85,18 +84,21 @@ const getDiscoveredTickers = () => {
     const stocks = [];
     const seen = new Set();
 
-    const scanDir = (dir, pattern, tickerOverride = null) => {
+    const scanDir = (dir, pattern, isProcessed = false) => {
         if (!fs.existsSync(dir)) return;
         const files = fs.readdirSync(dir);
         files.forEach(file => {
             const match = file.match(pattern);
-            if (match || tickerOverride) {
-                let ticker = tickerOverride;
-                if (!ticker && match) {
-                    ticker = match[1].toUpperCase().split('_')[0].split(' ')[0];
-                    // Special case for S&P 500
-                    if (file.includes('S&P 500')) ticker = 'SP500';
+            if (match) {
+                let ticker = match[1].toUpperCase();
+                
+                // For processed files, the ticker is just the filename
+                if (!isProcessed) {
+                    ticker = ticker.split('_')[0].split(' ')[0];
                 }
+                
+                // Special case for S&P 500
+                if (file.includes('S&P 500') || file.includes('sp500_index')) ticker = 'SP500';
                 
                 if (ticker && !seen.has(ticker)) {
                     seen.add(ticker);
@@ -111,10 +113,9 @@ const getDiscoveredTickers = () => {
     };
 
     // Prioritize processed_stock first
-    scanDir(path.join(__dirname, 'processed_stock'), /^(.+)\.csv$/);
+    scanDir(path.join(__dirname, 'processed_stock'), /^(.+)\.csv$/, true);
     scanDir(path.join(__dirname, 'fetch_stock'), /^(.+)\.csv$/);
     scanDir(__dirname, /^(.+)_index\.csv$/);
-    scanDir(__dirname, /^(.+)\.csv$/);
     scanDir(path.join(__dirname, 'local_data'), /^(.+)\.csv$/);
     return stocks;
 };

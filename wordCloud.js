@@ -165,7 +165,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             window.reflexChart.filterEventsByKeyword(d.text);
                         }
                         
-                        svg.selectAll("text").style("opacity", 0.4);
+                        svg.selectAll("text").style("opacity", 0.7);
                         d3.select(this).style("opacity", 1);
                     }
                 } else {
@@ -176,7 +176,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         window.reflexChart.filterEventsByTopic(d.text);
                         
                         svg.selectAll("text")
-                            .style("opacity", 0.4)
+                            .style("opacity", 0.7)
                             .style("stroke", "none");
                             
                         d3.select(this)
