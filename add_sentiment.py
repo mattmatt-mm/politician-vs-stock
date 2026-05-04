@@ -1,9 +1,17 @@
+import re
 import pandas as pd
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import os
 from textblob import TextBlob
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer as StandaloneSIA
+
+def preprocess_text(text):
+    if pd.isna(text):
+        return ''
+    text = str(text).lower()
+    text = re.sub(r'http\S+|@\w+|#\w+', '', text)
+    return text.strip()
 
 # Ensure vader_lexicon is downloaded
 try:
@@ -42,7 +50,7 @@ def process_sentiment(input_file, output_file):
     standalone_sia.lexicon.update(custom_lexicon)
     
     print("Computing sentiment scores...")
-    texts = df['text'].fillna('').astype(str)
+    texts = df['text'].fillna('').astype(str).apply(preprocess_text)
     
     vader_compounds = []
     vader_positivity = []
@@ -83,7 +91,8 @@ def process_sentiment(input_file, output_file):
     df['sentiment_direction'] = directions
     df['textblob_polarity'] = tb_polarities
     df['textblob_subjectivity'] = tb_subjectivities
-    
+    df['combined_sentiment'] = (df['sentiment_score'] * 0.7) + (df['textblob_polarity'] * 0.3)
+
     print(f"Saving scored dataset to: {output_file}")
     df.to_csv(output_file, index=False)
     print("Done!")

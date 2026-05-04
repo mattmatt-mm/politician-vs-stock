@@ -166,7 +166,8 @@ class ReflexChart {
                     topic: d.dominant_topic,
                     positivity: parseFloat(d.vader_positivity) || 0,
                     tbPolarity: parseFloat(d.textblob_polarity) || 0,
-                    tbSubjectivity: parseFloat(d.textblob_subjectivity) || 0
+                    tbSubjectivity: parseFloat(d.textblob_subjectivity) || 0,
+                    combinedScore: parseFloat(d.combined_sentiment) || 0
                 }))
                 .filter(tweet => {
                     if (!tweet.date || Number.isNaN(tweet.date.getTime()) || tweet.deleted) return false;
@@ -1168,7 +1169,7 @@ class ReflexChart {
                         x: event.date.getTime(),
                         id: event.id, // For bi-directional linking
                         title: '', // No text label
-                        text: `${meta.label} tweet<br>${this.escapeHtml(event.text)}<br>Move: ${event.reaction.label} (${event.reaction.horizonLabel})<br>Impact: ${event.reaction.impactLabel}${event.reaction.abnormalReturn !== null ? `<br>Excess vs S&P: ${event.reaction.abnormalLabel}` : ''}`,
+                        text: `${meta.label} tweet<br>${this.escapeHtml(event.text)}<br>Move: ${event.reaction.label} (${event.reaction.horizonLabel})<br>Impact: ${event.reaction.impactLabel}${event.reaction.abnormalReturn !== null ? `<br>Excess vs S&P: ${event.reaction.abnormalLabel}` : ''}<br>Combined: ${event.combinedScore.toFixed(2)}`,
                         fillColor: (this.selectedEventId && event.id === this.selectedEventId) ? meta.color : meta.color + '80'
                     }));
 
@@ -1341,6 +1342,10 @@ class ReflexChart {
                     <div class="tweet-card-metric">
                         <span class="label">Positivity</span>
                         <span class="val">${(event.positivity * 100).toFixed(0)}%</span>
+                    </div>
+                    <div class="tweet-card-metric">
+                        <span class="label">Combined</span>
+                        <span class="val">${event.combinedScore.toFixed(2)}</span>
                     </div>
                     <div class="tweet-card-metric">
                         <span class="label">Impact Z-Score</span>
