@@ -11,9 +11,11 @@ const MARKET_KEYWORDS = {
         'nvda', 'nvidia', 'chip', 'chips', 'semiconductor', 'ai',
         'blackwell', 'rubin', 'tariff', 'tariffs'
     ],
-    TSLA: [
-        'tsla', 'tesla', 'musk', 'ev', 'electric', 'autonomous', 'fsd'
-    ]
+    TSLA: ['tsla', 'tesla', 'musk', 'ev', 'electric', 'autonomous', 'fsd'],
+    AAPL: ['aapl', 'apple', 'iphone', 'tim cook', 'ipad', 'macbook'],
+    DE: ['de', 'john deere', 'deere', 'tractor', 'agriculture', 'farming'],
+    SNDK: ['sndk', 'sandisk', 'memory', 'flash', 'storage'],
+    PLTR: ['pltr', 'palantir', 'alex karp', 'data', 'analytics', 'cia', 'defense']
 };
 
 // Topic definitions are now loaded dynamically from data/ml/topic_definitions.json
@@ -49,8 +51,8 @@ const IMPACT_BAND_META = {
     'strong-positive': { label: 'Strong Positive', shortLabel: 'Strong Up' }
 };
 
-const TWEET_YEAR_MIN = 2024;
-const TWEET_YEAR_MAX = 2025;
+const TWEET_YEAR_MIN = 2019;
+const TWEET_YEAR_MAX = 2026;
 
 class ReflexChart {
     constructor(containerId) {
@@ -66,6 +68,7 @@ class ReflexChart {
         this.showVerticalLines = false;
         this.selectedEventId = null;
         this.currentWindowMs = null;
+        this.highlightedTicker = null;
 
         this.sciChartSurface = null;
         this.wasmContext = null;
@@ -288,7 +291,8 @@ class ReflexChart {
                                 open: parseFloat(d.Open || d.open),
                                 high: parseFloat(d.High || d.high),
                                 low: parseFloat(d.Low || d.low),
-                                close: parseFloat(d.Close || d.close)
+                                close: parseFloat(d.Close || d.close),
+                                volume: parseFloat(d.Volume || d.volume || 0)
                             }))
                             .filter(d => {
                                 if (!this.isValidCandle(d)) return false;
@@ -463,20 +467,24 @@ class ReflexChart {
 
         const minTime = stockData[0].date.getTime();
         const maxTime = stockData[stockData.length - 1].date.getTime();
+        const keywords = MARKET_KEYWORDS[ticker] || [];
 
         const events = this.tweets
             .filter(tweet => {
                 const tweetTime = tweet.date.getTime();
-                if (tweetTime < minTime || tweetTime > maxTime) return false;
-                if (this.isSp500Ticker(ticker)) return true;
-
-                const content = tweet.text.toLowerCase();
-                return (MARKET_KEYWORDS[ticker] || []).some(keyword => content.includes(keyword));
+                return tweetTime >= minTime && tweetTime <= maxTime;
             })
-            .map(tweet => this.enrichTweet(tweet, ticker, stockData, benchmarkData))
+            .map(tweet => {
+                const content = tweet.text.toLowerCase();
+                const isRelevant = this.isSp500Ticker(ticker) || keywords.some(k => content.includes(k));
+                return {
+                    ...this.enrichTweet(tweet, ticker, stockData, benchmarkData),
+                    isRelevant
+                };
+            })
             .sort((a, b) => a.date - b.date);
 
-        return events.slice(-500); // Take the latest 500 for the selected year
+        return events.slice(-1000); // Increase limit since we show more now
     }
 
     enrichTweet(tweet, ticker, stockData, benchmarkData = []) {
@@ -891,13 +899,19 @@ class ReflexChart {
             d.open,
             d.high,
             d.low,
-            d.close
+            d.close,
+            d.volume
         ]);
         const visibleEvents = this.eventsInDataRange(events, data);
         const defaultWindow = this.defaultWindowMs(data);
         const max = data[data.length - 1].date.getTime();
         const min = preservedRange ? preservedRange.min : Math.max(data[0].date.getTime(), max - defaultWindow);
         const actualMax = preservedRange ? preservedRange.max : max;
+        
+        // Prepare Volume Data
+        const volumeData = candleData.map(p => [p[0], p[5] || 0]);
+        // Remove volume from candleData for the candlestick series (OHLC only)
+        const ohlcData = candleData.map(p => [p[0], p[1], p[2], p[3], p[4]]);
 
         if (this.highChart) {
             this.highChart.destroy();
@@ -927,27 +941,37 @@ class ReflexChart {
             rangeSelector: { enabled: false },
             title: { text: null },
             legend: { enabled: false },
-            xAxis: {
+            xAxis: [{
+                // Main bottom axis
                 min,
                 max: actualMax,
                 ordinal: false,
                 crosshair: true,
                 lineColor: '#E4E4E7',
                 tickColor: '#E4E4E7',
+                labels: { style: { color: '#71717A', fontSize: '10px' } },
                 plotLines: visibleEvents.filter(event => {
                     return this.showVerticalLines || (this.selectedEventId && event.id === this.selectedEventId);
                 }).map(event => {
                     const isSelected = this.selectedEventId && event.id === this.selectedEventId;
+                    
+                    let isHoverRelevant = false;
+                    if (this.highlightedTicker) {
+                        const keywords = MARKET_KEYWORDS[this.highlightedTicker] || [this.highlightedTicker.toLowerCase()];
+                        const content = event.text.toLowerCase();
+                        isHoverRelevant = keywords.some(k => content.includes(k));
+                    }
+
                     return {
                         value: event.date.getTime(),
-                        color: SENTIMENT_META[event.sentiment.direction].color + (isSelected ? '' : 'B3'),
+                        color: SENTIMENT_META[event.sentiment.direction].color + ((isSelected || (this.highlightedTicker && isHoverRelevant)) ? '' : (this.highlightedTicker ? '80' : (event.isRelevant ? '' : '80'))),
                         width: isSelected ? 2 : 1,
                         zIndex: isSelected ? 5 : 1
                     };
                 }),
                 events: {
                     afterSetExtremes: (e) => {
-                        if (!e.trigger) return; // Prevent infinite loops from programmatic sets
+                        if (!e.trigger) return;
                         const filteredEvents = this.currentEvents.filter(event => {
                             const time = event.date.getTime();
                             return time >= e.min && time <= e.max;
@@ -955,12 +979,35 @@ class ReflexChart {
                         this.populateTweetStream(this.currentTicker, filteredEvents);
                     }
                 }
-            },
-            yAxis: {
+            }, {
+                // Top axis for flags
                 opposite: true,
-                gridLineColor: '#F4F4F5',
-                labels: { style: { color: '#52525B' } }
-            },
+                linkedTo: 0,
+                lineWidth: 0,
+                tickWidth: 0,
+                labels: { enabled: false },
+                gridLineWidth: 0
+            }],
+            yAxis: [{
+                // Price Axis
+                labels: { align: 'right', x: -3 },
+                title: { text: 'Price' },
+                height: '75%',
+                lineWidth: 1,
+                resize: { enabled: true },
+                opposite: true,
+                gridLineColor: '#F4F4F5'
+            }, {
+                // Volume Axis
+                labels: { align: 'right', x: -3 },
+                title: { text: 'Volume' },
+                top: '80%',
+                height: '20%',
+                offset: 0,
+                lineWidth: 1,
+                opposite: true,
+                gridLineColor: '#F4F4F5'
+            }],
             tooltip: {
                 split: false,
                 shared: true,
@@ -1018,9 +1065,19 @@ class ReflexChart {
                     type: 'candlestick',
                     id: `${ticker}-candles`,
                     name: ticker,
-                    data: candleData
+                    data: ohlcData,
+                    yAxis: 0
                 },
-                ...this.highchartsFlagSeries(visibleEvents)
+                {
+                    type: 'column',
+                    id: `${ticker}-volume`,
+                    name: 'Volume',
+                    data: volumeData,
+                    yAxis: 1,
+                    color: '#D4D4D8',
+                    borderColor: 'transparent'
+                },
+                ...this.highchartsFlagSeries(visibleEvents, null, 1) // Use xAxis 1 (top)
             ]
         });
 
@@ -1034,6 +1091,11 @@ class ReflexChart {
         const max = data[data.length - 1].date.getTime();
         const min = preservedRange ? preservedRange.min : Math.max(data[0].date.getTime(), max - defaultWindow);
         const actualMax = preservedRange ? preservedRange.max : max;
+        
+        // Volume support if available
+        const hasVolume = data[0].volume !== undefined;
+        const volumeData = hasVolume ? data.map(p => [p.date.getTime(), p.volume || 0]) : [];
+
         const lineData = this.withLineBreaks(data).map(point => [
             point.date.getTime(),
             point.break ? null : point.close
@@ -1067,7 +1129,8 @@ class ReflexChart {
             rangeSelector: { enabled: false },
             title: { text: null },
             legend: { enabled: false },
-            xAxis: {
+            xAxis: [{
+                // Bottom axis
                 min,
                 max: actualMax,
                 ordinal: false,
@@ -1078,9 +1141,19 @@ class ReflexChart {
                     return this.showVerticalLines || (this.selectedEventId && event.id === this.selectedEventId);
                 }).map(event => {
                     const isSelected = this.selectedEventId && event.id === this.selectedEventId;
+                    
+                    let isHoverRelevant = false;
+                    if (this.highlightedTicker) {
+                        const keywords = MARKET_KEYWORDS[this.highlightedTicker] || [this.highlightedTicker.toLowerCase()];
+                        const content = event.text.toLowerCase();
+                        isHoverRelevant = keywords.some(k => content.includes(k));
+                    }
+
+                    const opacity = (isSelected || (this.highlightedTicker && isHoverRelevant)) ? '' : (this.highlightedTicker ? '80' : (event.isRelevant ? '' : '80'));
+
                     return {
                         value: event.date.getTime(),
-                        color: SENTIMENT_META[event.sentiment.direction].color + (isSelected ? '' : 'B3'),
+                        color: SENTIMENT_META[event.sentiment.direction].color + opacity,
                         width: isSelected ? 2 : 1,
                         zIndex: isSelected ? 5 : 1
                     };
@@ -1095,12 +1168,34 @@ class ReflexChart {
                         this.populateTweetStream(this.currentTicker, filteredEvents);
                     }
                 }
-            },
-            yAxis: {
+            }, {
+                // Top axis for flags
+                opposite: true,
+                linkedTo: 0,
+                lineWidth: 0,
+                tickWidth: 0,
+                labels: { enabled: false },
+                gridLineWidth: 0
+            }],
+            yAxis: hasVolume ? [{
+                // Price
+                height: '75%',
+                lineWidth: 1,
+                opposite: true,
+                gridLineColor: '#F4F4F5'
+            }, {
+                // Volume
+                top: '80%',
+                height: '20%',
+                offset: 0,
+                lineWidth: 1,
+                opposite: true,
+                gridLineColor: '#F4F4F5'
+            }] : [{
                 opposite: true,
                 gridLineColor: '#F4F4F5',
                 labels: { style: { color: '#52525B' } }
-            },
+            }],
             tooltip: {
                 split: false,
                 shared: true,
@@ -1143,13 +1238,23 @@ class ReflexChart {
                 {
                     type: 'line',
                     id: `${ticker}-line`,
-                    name: 'S&P 500',
+                    name: 'Price',
                     data: lineData,
                     color: '#27272A',
                     lineWidth: 2,
-                    marker: { enabled: false }
+                    marker: { enabled: false },
+                    yAxis: 0
                 },
-                ...this.highchartsFlagSeries(visibleEvents, `${ticker}-line`)
+                ...(hasVolume ? [{
+                    type: 'column',
+                    id: `${ticker}-volume`,
+                    name: 'Volume',
+                    data: volumeData,
+                    yAxis: 1,
+                    color: '#D4D4D8',
+                    borderColor: 'transparent'
+                }] : []),
+                ...this.highchartsFlagSeries(visibleEvents, null, 1)
             ]
         });
 
@@ -1157,29 +1262,54 @@ class ReflexChart {
         this.reflowActiveChart();
     }
 
-    highchartsFlagSeries(events, onSeriesId = `${this.currentTicker}-candles`) {
+    highlightTicker(ticker) {
+        this.highlightedTicker = ticker;
+        this.renderActiveChart();
+    }
+
+    clearTickerHighlight() {
+        this.highlightedTicker = null;
+        this.renderActiveChart();
+    }
+
+    highchartsFlagSeries(events, onSeriesId = null, xAxisIdx = 0) {
         return ['positive', 'negative', 'neutral']
             .map(direction => {
                 const meta = SENTIMENT_META[direction];
                 const data = events
                     .filter(event => event.sentiment.direction === direction)
-                    .map(event => ({
-                        x: event.date.getTime(),
-                        id: event.id, // For bi-directional linking
-                        title: '', // No text label
-                        text: `${meta.label} tweet<br>${this.escapeHtml(event.text)}<br>Move: ${event.reaction.label} (${event.reaction.horizonLabel})<br>Impact: ${event.reaction.impactLabel}${event.reaction.abnormalReturn !== null ? `<br>Excess vs S&P: ${event.reaction.abnormalLabel}` : ''}`,
-                        fillColor: (this.selectedEventId && event.id === this.selectedEventId) ? meta.color : meta.color + '80'
-                    }));
+                    .map(event => {
+                        const isSelected = this.selectedEventId && event.id === this.selectedEventId;
+                        
+                        let isHoverRelevant = false;
+                        if (this.highlightedTicker) {
+                            const keywords = MARKET_KEYWORDS[this.highlightedTicker] || [this.highlightedTicker.toLowerCase()];
+                            const content = event.text.toLowerCase();
+                            isHoverRelevant = keywords.some(k => content.includes(k));
+                        }
+
+                        // Opacity logic: 100% if selected or hover-relevant, 50% otherwise
+                        const opacity = (isSelected || (this.highlightedTicker && isHoverRelevant)) ? '' : (this.highlightedTicker ? '80' : (event.isRelevant ? '' : '80'));
+                        
+                        return {
+                            x: event.date.getTime(),
+                            id: event.id,
+                            title: '',
+                            text: `${meta.label} tweet<br>${this.escapeHtml(event.text)}<br>Move: ${event.reaction.label} (${event.reaction.horizonLabel})<br>Impact: ${event.reaction.impactLabel}${event.reaction.abnormalReturn !== null ? `<br>Excess vs S&P: ${event.reaction.abnormalLabel}` : ''}`,
+                            fillColor: meta.color + opacity
+                        };
+                    });
 
                 return {
                     type: 'flags',
                     name: `${meta.label} tweets`,
                     data,
-                    onSeries: undefined, 
+                    onSeries: onSeriesId || undefined,
+                    xAxis: xAxisIdx,
                     shape: 'circlepin',
                     width: 5,
                     height: 5,
-                    y: -5, // Closer to axis
+                    y: xAxisIdx === 1 ? 5 : -5, // Pin down if on top axis, up if on bottom
                     color: 'transparent',
                     lineColor: 'transparent',
                     states: {
@@ -1462,16 +1592,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             const res = await fetch('/api/list-stocks');
             if (res.ok) {
                 const data = await res.json();
-                if (Array.isArray(data) && data.length > 0) {
-                    availableStocks = data;
-                    console.log('✅ Stock list refreshed:', availableStocks.length, 'tickers found.');
-                    // Trigger UI updates if elements exist
-                    if (typeof renderOptions === 'function') renderOptions();
-                    if (typeof renderModalStockList === 'function') renderModalStockList();
+                if (Array.isArray(data)) {
+                    if (data.length > 0) {
+                        availableStocks = data;
+                        console.log('✅ Stock list refreshed:', availableStocks.length, 'tickers found:', data.map(s => s.ticker).join(', '));
+                    } else {
+                        console.warn('⚠️ API /api/list-stocks returned empty array.');
+                    }
+                    renderOptions();
+                    renderModalStockList();
                 }
             }
         } catch (e) {
             console.warn('API /api/list-stocks unreachable, using defaults.');
+            renderModalStockList(); // Still render defaults
         }
         window.AVAILABLE_STOCKS = availableStocks;
     }
@@ -1521,8 +1655,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalTickerInput.value = '';
     };
 
-    const renderModalStockList = () => {
-        modalStockList.innerHTML = '';
+    function renderModalStockList() {
+        const listEl = document.getElementById('modal-stock-list');
+        if (!listEl) return;
+        
+        listEl.innerHTML = '';
+        console.log('Rendering modal stock list with:', availableStocks.length, 'items');
+        
         availableStocks.forEach(s => {
             const li = document.createElement('li');
             li.className = 'modal-stock-item';
@@ -1534,9 +1673,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 selectTicker(s.ticker, s.name);
                 closeModal();
             };
-            modalStockList.appendChild(li);
+            li.onmouseenter = () => {
+                window.reflexChart.highlightTicker(s.ticker);
+            };
+            li.onmouseleave = () => {
+                window.reflexChart.clearTickerHighlight();
+            };
+            listEl.appendChild(li);
         });
-    };
+    }
 
     // UI: Combobox Logic
     const selectTicker = async (ticker, name) => {
@@ -1549,13 +1694,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
     window.selectTickerUI = selectTicker;
 
-    const renderOptions = (filter = '') => {
+    function renderOptions(filter = '') {
         const query = filter.toLowerCase();
         const filtered = availableStocks.filter(s => 
             s.ticker.toLowerCase().includes(query) || 
             s.name.toLowerCase().includes(query)
         );
 
+        if (!list) return;
         list.innerHTML = '';
         
         // Add matching stocks
@@ -1570,6 +1716,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             li.onmousedown = (e) => {
                 e.preventDefault(); // Prevent input from blurring and closing the list
                 selectTicker(s.ticker, s.name);
+            };
+            li.onmouseenter = () => {
+                window.reflexChart.highlightTicker(s.ticker);
+            };
+            li.onmouseleave = () => {
+                window.reflexChart.clearTickerHighlight();
             };
             list.appendChild(li);
         });
@@ -1592,12 +1744,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     // Event Listeners
-    input.addEventListener('focus', () => {
+    input.addEventListener('focus', async () => {
         combobox.classList.add('open');
-        // If the value matches the selected ticker's name, show all options instead of filtering
+        // Refresh the stock list from server whenever the user focuses the input
+        // to ensure new stocks appear immediately.
+        await refreshStockList();
+        // If the value matches the selected ticker's name OR input is empty, show all options
         const stock = availableStocks.find(s => s.ticker === selectedTicker);
-        if (input.value === (stock?.name || selectedTicker)) {
-            renderOptions('');
+        const currentValue = input.value.trim().toLowerCase();
+        const selectedName = (stock?.name || selectedTicker).toLowerCase();
+        
+        if (currentValue === "" || currentValue === selectedName) {
+            renderOptions(''); // Show all
         } else {
             renderOptions(input.value);
         }
