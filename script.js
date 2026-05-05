@@ -150,11 +150,24 @@ class ReflexChart {
 
             const XAxis = DateTimeNumericAxis || NumericAxis;
             this.xAxis = new XAxis(wasmContext, {
-                id: 'shared-date-x',
+                id: 'bottom-x',
+                axisAlignment: EAxisAlignment.Bottom,
                 growBy: new NumberRange(0, 0.02),
                 drawMajorGridLines: false,
                 drawMinorGridLines: false
             });
+
+            this.topXAxis = new XAxis(wasmContext, {
+                id: 'top-x',
+                axisAlignment: EAxisAlignment.Top,
+                growBy: new NumberRange(0, 0.02),
+                drawMajorGridLines: false,
+                drawMinorGridLines: false,
+                labelStyle: { fontSize: 10, color: '#71717A' }
+            });
+
+            sciChartSurface.xAxes.add(this.xAxis);
+            sciChartSurface.xAxes.add(this.topXAxis);
 
             if (stackedLayoutReady) {
                 this.tweetBandYAxis = new NumericAxis(wasmContext, {
@@ -193,8 +206,6 @@ class ReflexChart {
                 sciChartSurface.yAxes.add(this.yAxis);
             }
 
-            sciChartSurface.xAxes.add(this.xAxis);
-
             const zoomExtents = new ZoomExtentsModifier();
             if (
                 stackedLayoutReady &&
@@ -206,9 +217,20 @@ class ReflexChart {
 
             sciChartSurface.chartModifiers.add(
                 new ZoomPanModifier({ enableZoom: false }),
+                new MouseWheelZoomModifier(),
                 new RolloverModifier({ showTooltip: true, showRolloverLine: true }),
                 zoomExtents
             );
+
+            // Sync top and bottom X axes
+            this.xAxis.visibleRangeChanged.subscribe((args) => {
+                if (this.topXAxis) this.topXAxis.visibleRange = args.visibleRange;
+            });
+            if (this.topXAxis) {
+                this.topXAxis.visibleRangeChanged.subscribe((args) => {
+                    this.xAxis.visibleRange = args.visibleRange;
+                });
+            }
         } catch (e) {
             console.error('SciChart initialization failed', e);
         }
@@ -1017,7 +1039,9 @@ class ReflexChart {
         if (!this.xAxis || !data.length) return;
 
         if (preservedRange) {
-            this.xAxis.visibleRange = new SciChart.NumberRange(preservedRange.min / 1000, preservedRange.max / 1000);
+            const range = new SciChart.NumberRange(preservedRange.min / 1000, preservedRange.max / 1000);
+            this.xAxis.visibleRange = range;
+            if (this.topXAxis) this.topXAxis.visibleRange = range;
             this.currentWindowMs = preservedRange.max - preservedRange.min;
             return;
         }
@@ -1027,13 +1051,17 @@ class ReflexChart {
         const dataSpan = max - min;
         const defaultSpan = this.defaultWindowMs(data) / 1000;
 
+        let targetRange;
         if (dataSpan > defaultSpan) {
-            this.xAxis.visibleRange = new SciChart.NumberRange(max - defaultSpan, max);
+            targetRange = new SciChart.NumberRange(max - defaultSpan, max);
             this.currentWindowMs = defaultSpan * 1000;
         } else {
-            this.sciChartSurface.zoomExtents();
+            targetRange = new SciChart.NumberRange(min, max);
             this.currentWindowMs = dataSpan * 1000;
         }
+        
+        this.xAxis.visibleRange = targetRange;
+        if (this.topXAxis) this.topXAxis.visibleRange = targetRange;
     }
 
     renderHighcharts(ticker, data, events, preservedRange = null) {
@@ -1109,7 +1137,10 @@ class ReflexChart {
                 crosshair: true,
                 lineColor: '#E4E4E7',
                 tickColor: '#E4E4E7',
-                labels: { style: { color: '#71717A', fontSize: '10px' } },
+                labels: { 
+                    enabled: true,
+                    style: { color: '#71717A', fontSize: '10px' } 
+                },
                 plotLines: visibleEvents.filter(event => {
                     return this.showVerticalLines || (this.selectedEventId && event.id === this.selectedEventId);
                 }).map(event => {
@@ -1143,49 +1174,79 @@ class ReflexChart {
                     }
                 }
             }, {
-                // Top axis for flags
+                // Top axis for timestamps
                 opposite: true,
                 linkedTo: 0,
                 lineWidth: 0,
                 tickWidth: 0,
-                labels: { enabled: false },
+                labels: { 
+                    enabled: true,
+                    style: { color: '#71717A', fontSize: '10px' },
+                    y: -5
+                },
                 gridLineWidth: 0
             }],
             yAxis: [{
+                // Tweet Strip
+                labels: { enabled: false },
+                title: { text: null },
+                height: HC_TWEET_STRIP_HEIGHT_PCT,
+                offset: 0,
+                lineWidth: 0,
+                gridLineWidth: 0,
+                opposite: true,
+                min: 0,
+                max: 1
+            }, {
                 // Price Axis
                 labels: { align: 'right', x: -3 },
                 title: { text: 'Price' },
+                top: HC_PRICE_Y_AXIS_TOP_PCT,
                 height: '75%',
                 lineWidth: 1,
                 resize: { enabled: true },
                 opposite: true,
-                gridLineColor: '#F4F4F5'
+                gridLineColor: '#F4F4F5',
+                growBy: [0.05, 0.05]
             }, {
                 // Volume Axis
                 labels: { align: 'right', x: -3 },
                 title: { text: 'Volume' },
-                top: '80%',
-                height: '20%',
+                top: '85%',
+                height: '15%',
                 offset: 0,
                 lineWidth: 1,
                 opposite: true,
                 gridLineColor: '#F4F4F5'
             }],
             tooltip: {
-                split: false,
-                shared: true,
+                split: true,
+                shared: false,
                 useHTML: true,
                 borderColor: '#E4E4E7',
                 formatter: function formatter() {
-                    const point = this.point || this.points?.[0]?.point;
+                    const point = this.point || (this.points ? this.points[0].point : null);
                     if (!point) return false;
+
                     if (point.series.options.id === 'tweet-markers') {
                         return point.tooltipHtml || false;
                     }
+
+                    if (point.series.type === 'candlestick') {
+                        return `
+                            <strong>${Highcharts.dateFormat('%b %e, %Y %H:%M', point.x)}</strong><br>
+                            Open ${point.open?.toFixed(2)} | High ${point.high?.toFixed(2)}<br>
+                            Low ${point.low?.toFixed(2)} | Close ${point.close?.toFixed(2)}
+                        `;
+                    }
+                    
+                    if (point.series.options.id.includes('-volume')) {
+                        return `<strong>Volume:</strong> ${point.y.toLocaleString()}`;
+                    }
+
                     return `
-                        <strong>${Highcharts.dateFormat('%b %e, %Y %H:%M', point.x)}</strong><br>
-                        Open ${point.open?.toFixed(2)} | High ${point.high?.toFixed(2)}<br>
-                        Low ${point.low?.toFixed(2)} | Close ${point.close?.toFixed(2)}
+                        <strong>${Highcharts.dateFormat('%b %e, %Y', point.x)}</strong><br>
+                        Price ${Number(point.y).toFixed(2)}
                     `;
                 }
             },
@@ -1202,7 +1263,7 @@ class ReflexChart {
                     upLineColor: '#10B981'
                 },
                 scatter: {
-                    stickyTracking: true,
+                    stickyTracking: false,
                     marker: {
                         states: {
                             hover: {
@@ -1226,18 +1287,18 @@ class ReflexChart {
                     id: `${ticker}-candles`,
                     name: ticker,
                     data: ohlcData,
-                    yAxis: 0
+                    yAxis: 1
                 },
                 {
                     type: 'column',
                     id: `${ticker}-volume`,
                     name: 'Volume',
                     data: volumeData,
-                    yAxis: 1,
+                    yAxis: 2,
                     color: '#D4D4D8',
                     borderColor: 'transparent'
                 },
-                ...this.highchartsFlagSeries(visibleEvents, null, 1) // Use xAxis 1 (top)
+                ...this.highchartsTweetScatterSeries(visibleEvents)
             ]
         });
 
@@ -1299,6 +1360,7 @@ class ReflexChart {
                 crosshair: true,
                 lineColor: '#E4E4E7',
                 tickColor: '#E4E4E7',
+                labels: { style: { color: '#71717A', fontSize: '10px' } },
                 plotLines: visibleEvents.filter(event => {
                     return this.showVerticalLines || (this.selectedEventId && event.id === this.selectedEventId);
                 }).map(event => {
@@ -1339,39 +1401,77 @@ class ReflexChart {
                 linkedTo: 0,
                 lineWidth: 0,
                 tickWidth: 0,
-                labels: { enabled: false },
+                labels: { 
+                    enabled: true,
+                    style: { color: '#71717A', fontSize: '10px' },
+                    y: -5
+                },
                 gridLineWidth: 0
             }],
             yAxis: hasVolume ? [{
+                // Tweet Strip
+                labels: { enabled: false },
+                title: { text: null },
+                height: HC_TWEET_STRIP_HEIGHT_PCT,
+                offset: 0,
+                lineWidth: 0,
+                gridLineWidth: 0,
+                opposite: true,
+                min: 0,
+                max: 1
+            }, {
                 // Price
+                top: HC_PRICE_Y_AXIS_TOP_PCT,
                 height: '75%',
                 lineWidth: 1,
                 opposite: true,
-                gridLineColor: '#F4F4F5'
+                gridLineColor: '#F4F4F5',
+                growBy: [0.05, 0.05]
             }, {
                 // Volume
-                top: '80%',
-                height: '20%',
+                top: '85%',
+                height: '15%',
                 offset: 0,
                 lineWidth: 1,
                 opposite: true,
                 gridLineColor: '#F4F4F5'
             }] : [{
+                // Tweet Strip
+                labels: { enabled: false },
+                title: { text: null },
+                height: HC_TWEET_STRIP_HEIGHT_PCT,
+                offset: 0,
+                lineWidth: 0,
+                gridLineWidth: 0,
+                opposite: true,
+                min: 0,
+                max: 1
+            }, {
+                // Price Only
+                top: HC_PRICE_Y_AXIS_TOP_PCT,
+                height: HC_PRICE_Y_AXIS_HEIGHT_PCT,
                 opposite: true,
                 gridLineColor: '#F4F4F5',
-                labels: { style: { color: '#52525B' } }
+                labels: { style: { color: '#52525B' } },
+                growBy: [0.05, 0.05]
             }],
             tooltip: {
-                split: false,
-                shared: true,
+                split: true,
+                shared: false,
                 useHTML: true,
                 borderColor: '#E4E4E7',
                 formatter: function formatter() {
-                    const point = this.point || this.points?.[0]?.point;
+                    const point = this.point || (this.points ? this.points[0].point : null);
                     if (!point) return false;
+
                     if (point.series.options.id === 'tweet-markers') {
                         return point.tooltipHtml || false;
                     }
+
+                    if (point.series.options.id.includes('-volume')) {
+                        return `<strong>Volume:</strong> ${point.y.toLocaleString()}`;
+                    }
+
                     return `
                         <strong>${Highcharts.dateFormat('%b %e, %Y', point.x)}</strong><br>
                         S&P 500 ${Number(point.y).toFixed(2)}
@@ -1386,7 +1486,7 @@ class ReflexChart {
                     states: { inactive: { opacity: 1 } }
                 },
                 scatter: {
-                    stickyTracking: true,
+                    stickyTracking: false,
                     marker: {
                         states: {
                             hover: {
@@ -1409,23 +1509,24 @@ class ReflexChart {
                     type: 'line',
                     id: `${ticker}-line`,
                     name: 'S&P 500',
-                    yAxis: 0,
                     data: lineData,
                     color: '#27272A',
                     lineWidth: 2,
                     marker: { enabled: false },
-                    yAxis: 0
+                    yAxis: 1,
+                    threshold: null,
+                    softThreshold: false
                 },
                 ...(hasVolume ? [{
                     type: 'column',
                     id: `${ticker}-volume`,
                     name: 'Volume',
                     data: volumeData,
-                    yAxis: 1,
+                    yAxis: 2,
                     color: '#D4D4D8',
                     borderColor: 'transparent'
                 }] : []),
-                ...this.highchartsFlagSeries(visibleEvents, null, 1)
+                ...this.highchartsTweetScatterSeries(visibleEvents)
             ]
         });
 
@@ -1454,7 +1555,7 @@ class ReflexChart {
                 type: 'scatter',
                 id: 'tweet-markers',
                 name: 'Tweet markers',
-                yAxis: 1,
+                yAxis: 0,
                 xAxis: 0,
                 showInNavigator: false,
                 clip: true,
@@ -1471,6 +1572,12 @@ class ReflexChart {
                             radius: 2.5,
                             fillColor: isSel ? meta.color : meta.color + '80',
                             lineWidth: 0
+                        }
+                    };
+                })
+            }
+        ];
+    }
     highlightTicker(ticker) {
         this.highlightedTicker = ticker;
         this.renderActiveChart();
@@ -1527,10 +1634,10 @@ class ReflexChart {
                             width: 8,
                             height: 8
                         }
-                    };
-                })
-            }
-        ];
+                    }
+                };
+            })
+            .filter(series => series.data.length > 0);
     }
 
     eventsInDataRange(events, data) {

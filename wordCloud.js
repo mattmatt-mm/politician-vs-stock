@@ -308,6 +308,11 @@ document.addEventListener("DOMContentLoaded", () => {
         termFreqData = freqData;
         if (currentMode === 'terms-bar') {
             renderBarChart();
+        } else if (currentMode === 'keywords' || currentMode === 'topics') {
+            // Keep the current view but ensure it doesn't disappear
+            if (!container.querySelector('svg') && (keywordData || stocksData)) {
+                renderCloud();
+            }
         }
     };
 
