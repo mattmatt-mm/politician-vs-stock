@@ -107,7 +107,7 @@
                     <div class="chart-header">
                         <div>
                             <h2 class="display-header">Search <span class="emphasis-italic">Cloud</span></h2>
-                            <p class="subtitle">Click a keyword to pivot the sector chart</p>
+                            <p class="subtitle" id="cloud-subtitle">Click a keyword to pivot the sector chart</p>
                         </div>
                         <div class="controls-row">
                             <div class="selector-container">
@@ -117,16 +117,26 @@
                                     <option value="topics">Topics</option>
                                     <option value="stocks">Stocks</option>
                                     <option value="terms-bar">Term Frequency</option>
+                                    <option value="graph">Impact Graph</option>
                                 </select>
                             </div>
 
-                            <button id="reset-dashboard-btn" class="reset-button" onclick="window.reflexChart.resetDashboard()">
-                                <i data-lucide="rotate-ccw" style="width: 14px; height: 14px; margin-right: 6px; stroke-width: 2.5px;"></i>
-                                Reset All
+                            <div id="graph-metric-container" class="selector-container" style="display: none;">
+                                <label class="control-label" for="graph-metric-selector">Intensity</label>
+                                <select id="graph-metric-selector" class="stock-select">
+                                    <option value="frequency">Mention Frequency</option>
+                                    <option value="impact" selected>Volume Impact</option>
+                                </select>
+                            </div>
+
+                            <button id="reset-dashboard-btn" class="reset-button" onclick="window.reflexChart.resetDashboard()" title="Reset All">
+                                <i data-lucide="rotate-ccw" style="width: 14px; height: 14px; stroke-width: 2.5px;"></i>
                             </button>
                         </div>
                     </div>
                     <div class="chart-container" id="word-cloud-container" style="flex: 1; height: 400px;"></div>
+                    <div class="chart-container" id="impact-graph-container" style="flex: 1; height: 400px; display: none;"></div>
+                    <div class="chart-container" id="stock-network-container" style="flex: 1; height: 400px; display: none;"></div>
                 </div>
 
                 <!-- Tweet Stream Area -->
@@ -185,17 +195,7 @@
                             <input type="text" id="modal-ticker-input" placeholder="e.g. AAPL, TSLA" maxlength="10">
                         </div>
                     </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="modal-start-year">Start Year</label>
-                            <input type="number" id="modal-start-year" placeholder="2024" min="2000" max="2026">
-                        </div>
-                        <div class="form-group">
-                            <label for="modal-end-year">End Year</label>
-                            <input type="number" id="modal-end-year" placeholder="2025" min="2000" max="2026">
-                        </div>
-                    </div>
-                    <p class="modal-hint">Fetching <b>hourly</b> data (Merging into existing file if available)</p>
+                    <p class="modal-hint">Fetching <b>Hybrid</b> data (Daily from 2019 + Hourly for last 2 years)</p>
                     <button id="modal-fetch-btn" class="primary-btn full-width">Fetch & Merge Data</button>
                 </div>
                 <div id="modal-loader" class="modal-loader" style="display: none">
@@ -217,5 +217,7 @@
     <script>
         lucide.createIcons();
     </script>
+    <script src="relationshipGraph.js"></script>
+    <script src="stockNetwork.js"></script>
 </body>
 </html>

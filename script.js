@@ -11,9 +11,11 @@ const MARKET_KEYWORDS = {
         'nvda', 'nvidia', 'chip', 'chips', 'semiconductor', 'ai',
         'blackwell', 'rubin', 'tariff', 'tariffs'
     ],
-    TSLA: [
-        'tsla', 'tesla', 'musk', 'ev', 'electric', 'autonomous', 'fsd'
-    ]
+    TSLA: ['tsla', 'tesla', 'musk', 'ev', 'electric', 'autonomous', 'fsd'],
+    AAPL: ['aapl', 'apple', 'iphone', 'tim cook', 'ipad', 'macbook'],
+    DE: ['de', 'john deere', 'deere', 'tractor', 'agriculture', 'farming'],
+    SNDK: ['sndk', 'sandisk', 'memory', 'flash', 'storage'],
+    PLTR: ['pltr', 'palantir', 'alex karp', 'data', 'analytics', 'cia', 'defense']
 };
 
 // Topic definitions are now loaded dynamically from data/ml/topic_definitions.json
@@ -49,8 +51,8 @@ const IMPACT_BAND_META = {
     'strong-positive': { label: 'Strong Positive', shortLabel: 'Strong Up' }
 };
 
-const TWEET_YEAR_MIN = 2024;
-const TWEET_YEAR_MAX = 2025;
+const TWEET_YEAR_MIN = 2019;
+const TWEET_YEAR_MAX = 2026;
 
 /** Highcharts Stock: thin top pane for tweet dots; main price OHLC/line uses the pane below. */
 const HC_TWEET_STRIP_HEIGHT_PCT = '10%';
@@ -75,6 +77,10 @@ class ReflexChart {
         this.showVerticalLines = false;
         this.selectedEventId = null;
         this.currentWindowMs = null;
+        this.highlightedTicker = null;
+        this.impactGraph = new RelationshipGraph('impact-graph-container');
+        this.stockNetwork = new StockNetwork('stock-network-container');
+        this.currentImpactfulWords = new Map(); // Store word node data from the graph
 
         this.sciChartSurface = null;
         this.wasmContext = null;
@@ -212,7 +218,7 @@ class ReflexChart {
         if (this.tweets.length > 0) return this.tweets;
 
         try {
-            const data = await d3.csv('data/ml/trump_tweets_topics.csv?v=' + Date.now());
+            const data = await d3.csv('processed_tweet/trump_tweets_topics.csv?v=' + Date.now());
             this.tweets = data
                 .map(d => ({
                     id: d.id,
@@ -322,6 +328,15 @@ class ReflexChart {
             if (window.updateTermFrequency) {
                 window.updateTermFrequency(this.computeTermFrequency(this.currentEvents));
             }
+            
+            // Update graph if it's visible
+            if (document.getElementById('impact-graph-container').style.display !== 'none') {
+                this.renderImpactGraph();
+            }
+            if (document.getElementById('stock-network-container').style.display !== 'none') {
+                this.renderStockNetwork();
+            }
+
             // Force range reset when changing ticker or year to fix "sticky range" bug
             await this.renderActiveChart(true);
         } catch (e) {
@@ -369,11 +384,10 @@ class ReflexChart {
         }
 
         const possiblePaths = [
-            `local_data/${tickerSymbol}_60min.csv`,
-            `fetch_stock/${tickerSymbol}.csv`,
-            `fetch_stock/${tickerSymbol}_last_1mo.csv`,
-            `${tickerSymbol}_last_1mo.csv`,
+            `processed_stock/${tickerSymbol}.csv`,
+            `processed_stock/${tickerSymbol}_60min.csv`,
             `local_data/${tickerSymbol}.csv`,
+            `fetch_stock/${tickerSymbol}.csv`,
             `${tickerSymbol}.csv`
         ];
 
@@ -397,7 +411,8 @@ class ReflexChart {
                                 open: parseFloat(d.Open || d.open),
                                 high: parseFloat(d.High || d.high),
                                 low: parseFloat(d.Low || d.low),
-                                close: parseFloat(d.Close || d.close)
+                                close: parseFloat(d.Close || d.close),
+                                volume: parseFloat(d.Volume || d.volume || 0)
                             }))
                             .filter(d => {
                                 if (!this.isValidCandle(d)) return false;
@@ -438,7 +453,7 @@ class ReflexChart {
     }
 
     async loadSp500IndexData() {
-        const rows = await d3.csv('local_data/sp500_index.csv');
+        const rows = await d3.csv('processed_stock/sp500_index.csv');
 
         return rows
             .map(row => {
@@ -572,20 +587,24 @@ class ReflexChart {
 
         const minTime = stockData[0].date.getTime();
         const maxTime = stockData[stockData.length - 1].date.getTime();
+        const keywords = MARKET_KEYWORDS[ticker] || [];
 
         const events = this.tweets
             .filter(tweet => {
                 const tweetTime = tweet.date.getTime();
-                if (tweetTime < minTime || tweetTime > maxTime) return false;
-                if (this.isSp500Ticker(ticker)) return true;
-
-                const content = tweet.text.toLowerCase();
-                return (MARKET_KEYWORDS[ticker] || []).some(keyword => content.includes(keyword));
+                return tweetTime >= minTime && tweetTime <= maxTime;
             })
-            .map(tweet => this.enrichTweet(tweet, ticker, stockData, benchmarkData))
+            .map(tweet => {
+                const content = tweet.text.toLowerCase();
+                const isRelevant = this.isSp500Ticker(ticker) || keywords.some(k => content.includes(k));
+                return {
+                    ...this.enrichTweet(tweet, ticker, stockData, benchmarkData),
+                    isRelevant
+                };
+            })
             .sort((a, b) => a.date - b.date);
 
-        return events.slice(-500); // Take the latest 500 for the selected year
+        return events.slice(-1000); // Increase limit since we show more now
     }
 
     enrichTweet(tweet, ticker, stockData, benchmarkData = []) {
@@ -616,6 +635,7 @@ class ReflexChart {
         if (!moveWindow) return this.emptyReaction('outside range', horizonLabel);
 
         const value = moveWindow.returnPct;
+        const volumeImpact = moveWindow.volumeMultiplier;
         const zScore = this.calculateVolatilityAdjustedScore(stockData, moveWindow.startIndex, moveWindow.endIndex);
         const abnormalReturn = this.canCalculateAbnormalReturn(stockData, benchmarkData)
             ? this.calculateAbnormalReturn(tweetDate, targetMs, value, benchmarkData)
@@ -625,6 +645,7 @@ class ReflexChart {
         return {
             label: this.formatPercent(value),
             value,
+            volumeImpact,
             direction: value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral',
             horizonLabel,
             zScore,
@@ -678,10 +699,18 @@ class ReflexChart {
         const endClose = stockData[endIndex].close;
         if (!Number.isFinite(startClose) || !Number.isFinite(endClose) || startClose === 0) return null;
 
+        // Volume Impact calculation
+        const eventVolume = stockData[startIndex].volume || 0;
+        const lookback = 20;
+        const prevVolumes = stockData.slice(Math.max(0, startIndex - lookback), startIndex).map(d => d.volume || 0);
+        const avgVolume = prevVolumes.length > 0 ? prevVolumes.reduce((a, b) => a + b, 0) / prevVolumes.length : eventVolume;
+        const volumeMultiplier = avgVolume > 0 ? eventVolume / avgVolume : 1.0;
+
         return {
             startIndex,
             endIndex,
-            returnPct: ((endClose - startClose) / startClose) * 100
+            returnPct: ((endClose - startClose) / startClose) * 100,
+            volumeMultiplier
         };
     }
 
@@ -1028,13 +1057,19 @@ class ReflexChart {
             d.open,
             d.high,
             d.low,
-            d.close
+            d.close,
+            d.volume
         ]);
         const visibleEvents = this.eventsInDataRange(events, data);
         const defaultWindow = this.defaultWindowMs(data);
         const max = data[data.length - 1].date.getTime();
         const min = preservedRange ? preservedRange.min : Math.max(data[0].date.getTime(), max - defaultWindow);
         const actualMax = preservedRange ? preservedRange.max : max;
+        
+        // Prepare Volume Data
+        const volumeData = candleData.map(p => [p[0], p[5] || 0]);
+        // Remove volume from candleData for the candlestick series (OHLC only)
+        const ohlcData = candleData.map(p => [p[0], p[1], p[2], p[3], p[4]]);
 
         if (this.highChart) {
             this.highChart.destroy();
@@ -1066,27 +1101,37 @@ class ReflexChart {
             rangeSelector: { enabled: false },
             title: { text: null },
             legend: { enabled: false },
-            xAxis: {
+            xAxis: [{
+                // Main bottom axis
                 min,
                 max: actualMax,
                 ordinal: false,
                 crosshair: true,
                 lineColor: '#E4E4E7',
                 tickColor: '#E4E4E7',
+                labels: { style: { color: '#71717A', fontSize: '10px' } },
                 plotLines: visibleEvents.filter(event => {
                     return this.showVerticalLines || (this.selectedEventId && event.id === this.selectedEventId);
                 }).map(event => {
                     const isSelected = this.selectedEventId && event.id === this.selectedEventId;
+                    
+                    let isHoverRelevant = false;
+                    if (this.highlightedTicker) {
+                        const keywords = MARKET_KEYWORDS[this.highlightedTicker] || [this.highlightedTicker.toLowerCase()];
+                        const content = event.text.toLowerCase();
+                        isHoverRelevant = keywords.some(k => content.includes(k));
+                    }
+
                     return {
                         value: event.date.getTime(),
-                        color: SENTIMENT_META[event.sentiment.direction].color + (isSelected ? '' : '33'),
+                        color: SENTIMENT_META[event.sentiment.direction].color + ((isSelected || (this.highlightedTicker && isHoverRelevant)) ? '' : (this.highlightedTicker ? '80' : (event.isRelevant ? '' : '80'))),
                         width: isSelected ? 2 : 1,
                         zIndex: isSelected ? 5 : 1
                     };
                 }),
                 events: {
                     afterSetExtremes: (e) => {
-                        if (!e.trigger) return; // Prevent infinite loops from programmatic sets
+                        if (!e.trigger) return;
                         const filteredEvents = this.currentEvents.filter(event => {
                             const time = event.date.getTime();
                             return time >= e.min && time <= e.max;
@@ -1097,32 +1142,35 @@ class ReflexChart {
                         }
                     }
                 }
-            },
-            yAxis: [
-                {
-                    opposite: true,
-                    top: HC_PRICE_Y_AXIS_TOP_PCT,
-                    height: HC_PRICE_Y_AXIS_HEIGHT_PCT,
-                    resize: { enabled: false },
-                    gridLineColor: '#F4F4F5',
-                    labels: { style: { color: '#52525B' } }
-                },
-                {
-                    opposite: true,
-                    top: '0%',
-                    height: HC_TWEET_STRIP_HEIGHT_PCT,
-                    offset: 0,
-                    min: 0,
-                    max: 1,
-                    visible: false,
-                    gridLineWidth: 0,
-                    minorGridLineWidth: 0,
-                    labels: { enabled: false },
-                    title: { text: null },
-                    tickLength: 0,
-                    lineWidth: 0
-                }
-            ],
+            }, {
+                // Top axis for flags
+                opposite: true,
+                linkedTo: 0,
+                lineWidth: 0,
+                tickWidth: 0,
+                labels: { enabled: false },
+                gridLineWidth: 0
+            }],
+            yAxis: [{
+                // Price Axis
+                labels: { align: 'right', x: -3 },
+                title: { text: 'Price' },
+                height: '75%',
+                lineWidth: 1,
+                resize: { enabled: true },
+                opposite: true,
+                gridLineColor: '#F4F4F5'
+            }, {
+                // Volume Axis
+                labels: { align: 'right', x: -3 },
+                title: { text: 'Volume' },
+                top: '80%',
+                height: '20%',
+                offset: 0,
+                lineWidth: 1,
+                opposite: true,
+                gridLineColor: '#F4F4F5'
+            }],
             tooltip: {
                 split: false,
                 shared: true,
@@ -1177,10 +1225,19 @@ class ReflexChart {
                     type: 'candlestick',
                     id: `${ticker}-candles`,
                     name: ticker,
-                    yAxis: 0,
-                    data: candleData
+                    data: ohlcData,
+                    yAxis: 0
                 },
-                ...this.highchartsTweetScatterSeries(visibleEvents)
+                {
+                    type: 'column',
+                    id: `${ticker}-volume`,
+                    name: 'Volume',
+                    data: volumeData,
+                    yAxis: 1,
+                    color: '#D4D4D8',
+                    borderColor: 'transparent'
+                },
+                ...this.highchartsFlagSeries(visibleEvents, null, 1) // Use xAxis 1 (top)
             ]
         });
 
@@ -1194,6 +1251,11 @@ class ReflexChart {
         const max = data[data.length - 1].date.getTime();
         const min = preservedRange ? preservedRange.min : Math.max(data[0].date.getTime(), max - defaultWindow);
         const actualMax = preservedRange ? preservedRange.max : max;
+        
+        // Volume support if available
+        const hasVolume = data[0].volume !== undefined;
+        const volumeData = hasVolume ? data.map(p => [p.date.getTime(), p.volume || 0]) : [];
+
         const lineData = this.withLineBreaks(data).map(point => [
             point.date.getTime(),
             point.break ? null : point.close
@@ -1229,7 +1291,8 @@ class ReflexChart {
             rangeSelector: { enabled: false },
             title: { text: null },
             legend: { enabled: false },
-            xAxis: {
+            xAxis: [{
+                // Bottom axis
                 min,
                 max: actualMax,
                 ordinal: false,
@@ -1240,9 +1303,19 @@ class ReflexChart {
                     return this.showVerticalLines || (this.selectedEventId && event.id === this.selectedEventId);
                 }).map(event => {
                     const isSelected = this.selectedEventId && event.id === this.selectedEventId;
+                    
+                    let isHoverRelevant = false;
+                    if (this.highlightedTicker) {
+                        const keywords = MARKET_KEYWORDS[this.highlightedTicker] || [this.highlightedTicker.toLowerCase()];
+                        const content = event.text.toLowerCase();
+                        isHoverRelevant = keywords.some(k => content.includes(k));
+                    }
+
+                    const opacity = (isSelected || (this.highlightedTicker && isHoverRelevant)) ? '' : (this.highlightedTicker ? '80' : (event.isRelevant ? '' : '80'));
+
                     return {
                         value: event.date.getTime(),
-                        color: SENTIMENT_META[event.sentiment.direction].color + (isSelected ? '' : '33'),
+                        color: SENTIMENT_META[event.sentiment.direction].color + opacity,
                         width: isSelected ? 2 : 1,
                         zIndex: isSelected ? 5 : 1
                     };
@@ -1260,32 +1333,34 @@ class ReflexChart {
                         }
                     }
                 }
-            },
-            yAxis: [
-                {
-                    opposite: true,
-                    top: HC_PRICE_Y_AXIS_TOP_PCT,
-                    height: HC_PRICE_Y_AXIS_HEIGHT_PCT,
-                    resize: { enabled: false },
-                    gridLineColor: '#F4F4F5',
-                    labels: { style: { color: '#52525B' } }
-                },
-                {
-                    opposite: true,
-                    top: '0%',
-                    height: HC_TWEET_STRIP_HEIGHT_PCT,
-                    offset: 0,
-                    min: 0,
-                    max: 1,
-                    visible: false,
-                    gridLineWidth: 0,
-                    minorGridLineWidth: 0,
-                    labels: { enabled: false },
-                    title: { text: null },
-                    tickLength: 0,
-                    lineWidth: 0
-                }
-            ],
+            }, {
+                // Top axis for flags
+                opposite: true,
+                linkedTo: 0,
+                lineWidth: 0,
+                tickWidth: 0,
+                labels: { enabled: false },
+                gridLineWidth: 0
+            }],
+            yAxis: hasVolume ? [{
+                // Price
+                height: '75%',
+                lineWidth: 1,
+                opposite: true,
+                gridLineColor: '#F4F4F5'
+            }, {
+                // Volume
+                top: '80%',
+                height: '20%',
+                offset: 0,
+                lineWidth: 1,
+                opposite: true,
+                gridLineColor: '#F4F4F5'
+            }] : [{
+                opposite: true,
+                gridLineColor: '#F4F4F5',
+                labels: { style: { color: '#52525B' } }
+            }],
             tooltip: {
                 split: false,
                 shared: true,
@@ -1338,9 +1413,19 @@ class ReflexChart {
                     data: lineData,
                     color: '#27272A',
                     lineWidth: 2,
-                    marker: { enabled: false }
+                    marker: { enabled: false },
+                    yAxis: 0
                 },
-                ...this.highchartsTweetScatterSeries(visibleEvents)
+                ...(hasVolume ? [{
+                    type: 'column',
+                    id: `${ticker}-volume`,
+                    name: 'Volume',
+                    data: volumeData,
+                    yAxis: 1,
+                    color: '#D4D4D8',
+                    borderColor: 'transparent'
+                }] : []),
+                ...this.highchartsFlagSeries(visibleEvents, null, 1)
             ]
         });
 
@@ -1386,6 +1471,61 @@ class ReflexChart {
                             radius: 2.5,
                             fillColor: isSel ? meta.color : meta.color + '80',
                             lineWidth: 0
+    highlightTicker(ticker) {
+        this.highlightedTicker = ticker;
+        this.renderActiveChart();
+    }
+
+    clearTickerHighlight() {
+        this.highlightedTicker = null;
+        this.renderActiveChart();
+    }
+
+    highchartsFlagSeries(events, onSeriesId = null, xAxisIdx = 0) {
+        return ['positive', 'negative', 'neutral']
+            .map(direction => {
+                const meta = SENTIMENT_META[direction];
+                const data = events
+                    .filter(event => event.sentiment.direction === direction)
+                    .map(event => {
+                        const isSelected = this.selectedEventId && event.id === this.selectedEventId;
+                        
+                        let isHoverRelevant = false;
+                        if (this.highlightedTicker) {
+                            const keywords = MARKET_KEYWORDS[this.highlightedTicker] || [this.highlightedTicker.toLowerCase()];
+                            const content = event.text.toLowerCase();
+                            isHoverRelevant = keywords.some(k => content.includes(k));
+                        }
+
+                        // Opacity logic: 100% if selected or hover-relevant, 50% otherwise
+                        const opacity = (isSelected || (this.highlightedTicker && isHoverRelevant)) ? '' : (this.highlightedTicker ? '80' : (event.isRelevant ? '' : '80'));
+                        
+                        return {
+                            x: event.date.getTime(),
+                            id: event.id,
+                            title: '',
+                            text: `${meta.label} tweet<br>${this.escapeHtml(event.text)}<br>Move: ${event.reaction.label} (${event.reaction.horizonLabel})<br>Impact: ${event.reaction.impactLabel}${event.reaction.abnormalReturn !== null ? `<br>Excess vs S&P: ${event.reaction.abnormalLabel}` : ''}`,
+                            fillColor: meta.color + opacity
+                        };
+                    });
+
+                return {
+                    type: 'flags',
+                    name: `${meta.label} tweets`,
+                    data,
+                    onSeries: onSeriesId || undefined,
+                    xAxis: xAxisIdx,
+                    shape: 'circlepin',
+                    width: 5,
+                    height: 5,
+                    y: xAxisIdx === 1 ? 5 : -5, // Pin down if on top axis, up if on bottom
+                    color: 'transparent',
+                    lineColor: 'transparent',
+                    states: {
+                        hover: { 
+                            fillColor: meta.color,
+                            width: 8,
+                            height: 8
                         }
                     };
                 })
@@ -1411,6 +1551,194 @@ class ReflexChart {
             const closestDistance = Math.abs(closest.date.getTime() - target);
             return distance < closestDistance ? candle : closest;
         }, data[0]);
+    }
+
+    scrollToTweet(id) {
+        const container = document.getElementById('tweet-stream-container');
+        const card = container.querySelector(`[data-id="${id}"]`);
+        if (card) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            card.classList.add('pulse');
+            setTimeout(() => card.classList.remove('pulse'), 2000);
+            this.selectedEventId = id;
+            this.renderActiveChart();
+        }
+    }
+
+    renderImpactGraph(metric = 'impact') {
+        const data = this.getGraphData();
+        this.impactGraph.render(data, metric);
+    }
+
+    getGraphData() {
+        const STOP_WORDS = new Set(['the', 'and', 'for', 'this', 'that', 'with', 'from', 'have', 'been', 'will', 'are', 'was', 'were', 'our', 'has', 'your', 'their', 'they', 'into', 'over', 'more', 'about', 'just', 'very', 'only', 'than', 'could', 'should', 'would']);
+        const nodes = [];
+        const links = [];
+        const wordNodes = new Map();
+        
+        // Filter tweets with volume data
+        const impactfulTweets = this.currentEvents
+            .filter(e => e.reaction && e.reaction.volumeImpact !== undefined)
+            .sort((a, b) => b.reaction.volumeImpact - a.reaction.volumeImpact)
+            .slice(0, 15); // Top 15 most impactful for clarity
+
+        impactfulTweets.forEach(tweet => {
+            const tweetId = `tweet-${tweet.id}`;
+            const impact = tweet.reaction.volumeImpact || 1;
+            
+            nodes.push({
+                id: tweetId,
+                type: 'tweet',
+                sentiment: tweet.sentiment.direction,
+                fullText: tweet.text,
+                impactScore: impact,
+                size: 6 + (Math.min(impact, 5) * 4)
+            });
+
+            const words = tweet.text.toLowerCase()
+                .replace(/[^\w\s]/gi, '')
+                .split(' ')
+                .filter(w => w.length > 3 && !STOP_WORDS.has(w));
+
+            const uniqueWords = [...new Set(words)];
+            uniqueWords.forEach(word => {
+                if (!wordNodes.has(word)) {
+                    wordNodes.set(word, {
+                        id: word,
+                        type: 'word',
+                        count: 0,
+                        impactScore: 0,
+                        size: 8
+                    });
+                }
+                const wordNode = wordNodes.get(word);
+                wordNode.count += 1;
+                wordNode.impactScore += impact;
+                wordNode.size += 2;
+
+                links.push({
+                    source: tweetId,
+                    target: word,
+                    value: 2
+                });
+            });
+        });
+
+        nodes.push(...Array.from(wordNodes.values()));
+        this.currentImpactfulWords = wordNodes; // Cache for interaction
+        return { nodes, links };
+    }
+
+    async renderStockNetwork() {
+        const data = await this.getStockNetworkData();
+        this.stockNetwork.render(data);
+    }
+
+    async getStockNetworkData() {
+        const centerTicker = this.currentTicker;
+        const nodes = [{ id: centerTicker, isCenter: true }];
+        const links = [];
+        const seenNodes = new Set([centerTicker]);
+
+        // 1. Topic-based relationships
+        const topicMap = {
+            'National Security': ['PLTR', 'LMT', 'BA', 'RTX'],
+            'Technology & Crypto': ['TSLA', 'NVDA', 'BTC', 'COIN', 'MSFT'],
+            'Economy & Trade': ['SP500', 'DJIA', 'GOLD', 'AAPL', 'AMZN'],
+            'Energy & Border': ['TSLA', 'XOM', 'CVX', 'NEE', 'F'],
+            'Healthcare & Misc': ['UNH', 'JNJ', 'PFE'],
+            'Global Relations': ['BA', 'CAT', 'SP500'],
+            'Political Strategy': ['SP500', 'DJIA']
+        };
+
+        const centerTopics = Object.entries(topicMap)
+            .filter(([topic, tickers]) => tickers.includes(centerTicker))
+            .map(([topic]) => topic);
+
+        centerTopics.forEach(topic => {
+            topicMap[topic].forEach(ticker => {
+                if (ticker !== centerTicker && window.AVAILABLE_STOCKS.some(s => s.ticker === ticker)) {
+                    if (!seenNodes.has(ticker)) {
+                        nodes.push({ id: ticker, isCenter: false });
+                        seenNodes.add(ticker);
+                    }
+                    links.push({
+                        source: centerTicker,
+                        target: ticker,
+                        reason: `Related via ${topic}`
+                    });
+                }
+            });
+        });
+
+        // 2. Statistical Correlation (Pearson)
+        // We only do this for a subset of peers to keep it fast
+        const potentialPeers = window.AVAILABLE_STOCKS
+            .filter(s => !seenNodes.has(s.ticker))
+            .slice(0, 5);
+
+        for (const peer of potentialPeers) {
+            const correlation = await this.calculateCorrelation(centerTicker, peer.ticker);
+            if (correlation > 0.5) {
+                nodes.push({ id: peer.ticker, isCenter: false });
+                seenNodes.add(peer.ticker);
+                links.push({
+                    source: centerTicker,
+                    target: peer.ticker,
+                    reason: `High Correlation (${(correlation * 100).toFixed(0)}%)`
+                });
+            }
+        }
+
+        // Fallback
+        if (nodes.length === 1) {
+            window.AVAILABLE_STOCKS.slice(0, 5).forEach(s => {
+                if (s.ticker !== centerTicker && !seenNodes.has(s.ticker)) {
+                    nodes.push({ id: s.ticker, isCenter: false });
+                    seenNodes.add(s.ticker);
+                    links.push({ source: centerTicker, target: s.ticker, reason: "Market Peer" });
+                }
+            });
+        }
+
+        return { nodes, links };
+    }
+
+    async calculateCorrelation(t1, t2) {
+        try {
+            const d1 = await this.loadStockData(t1);
+            const d2 = await this.loadStockData(t2);
+            
+            // Align dates
+            const prices1 = [];
+            const prices2 = [];
+            const map2 = new Map(d2.map(d => [d.date.getTime(), d.close]));
+            
+            d1.forEach(p => {
+                const p2 = map2.get(p.date.getTime());
+                if (p2 !== undefined) {
+                    prices1.push(p.close);
+                    prices2.push(p2);
+                }
+            });
+
+            if (prices1.length < 10) return 0;
+
+            // Pearson Correlation
+            const n = prices1.length;
+            const sum1 = d3.sum(prices1);
+            const sum2 = d3.sum(prices2);
+            const sum1Sq = d3.sum(prices1.map(x => x * x));
+            const sum2Sq = d3.sum(prices2.map(x => x * x));
+            const pSum = d3.sum(prices1.map((x, i) => x * prices2[i]));
+
+            const num = pSum - (sum1 * sum2 / n);
+            const den = Math.sqrt((sum1Sq - (sum1 * sum1 / n)) * (sum2Sq - (sum2 * sum2 / n)));
+
+            return den === 0 ? 0 : num / den;
+        } catch (e) {
+            return 0;
+        }
     }
 
     defaultWindowMs(data) {
@@ -1560,6 +1888,52 @@ class ReflexChart {
             `;
 
             card.addEventListener('click', () => {
+                const mode = document.getElementById('cloud-mode-selector')?.value;
+                
+                if (mode === 'graph' && this.currentImpactfulWords.size > 0) {
+                    // Impact Graph Interaction: Search for tweets with same impactful word
+                    const wordsInTweet = event.text.toLowerCase()
+                        .replace(/[^\w\s]/gi, '')
+                        .split(' ')
+                        .filter(w => this.currentImpactfulWords.has(w));
+                    
+                    if (wordsInTweet.length > 0) {
+                        // Pick the word with highest impact score
+                        const targetWord = wordsInTweet.reduce((a, b) => 
+                            (this.currentImpactfulWords.get(a).impactScore > this.currentImpactfulWords.get(b).impactScore) ? a : b
+                        );
+                        
+                        // Filter events by this word
+                        const allRelated = this.currentEvents.filter(e => 
+                            e.text.toLowerCase().includes(targetWord)
+                        );
+                        
+                        // Find index of current event in the filtered list
+                        const currentIndex = allRelated.findIndex(e => e.id === event.id);
+                        
+                        if (currentIndex !== -1) {
+                            // Show 5 before and 5 after
+                            const start = Math.max(0, currentIndex - 5);
+                            const end = Math.min(allRelated.length, currentIndex + 6);
+                            const windowedEvents = allRelated.slice(start, end);
+                            
+                            this.selectedEventId = event.id;
+                            this.renderFilteredStream(windowedEvents, `Keyword context: ${targetWord}`);
+                            
+                            // Highlight the specific card after re-rendering
+                            setTimeout(() => {
+                                const newCard = container.querySelector(`[data-event-id="${event.id}"]`);
+                                if (newCard) newCard.classList.add('active');
+                            }, 100);
+                            
+                            this.panToDate(event.date);
+                            this.renderActiveChart();
+                            return; // Exit early
+                        }
+                    }
+                }
+
+                // Default behavior
                 this.selectedEventId = event.id;
                 
                 // Highlight visually
@@ -1673,19 +2047,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             const res = await fetch('/api/list-stocks');
             if (res.ok) {
                 const data = await res.json();
-                if (Array.isArray(data) && data.length > 0) {
-                    availableStocks = data;
+                if (Array.isArray(data)) {
+                    if (data.length > 0) {
+                        availableStocks = data;
+                        console.log('✅ Stock list refreshed:', availableStocks.length, 'tickers found:', data.map(s => s.ticker).join(', '));
+                    } else {
+                        console.warn('⚠️ API /api/list-stocks returned empty array.');
+                    }
+                    renderOptions();
+                    renderModalStockList();
                 }
             }
         } catch (e) {
             console.warn('API /api/list-stocks unreachable, using defaults.');
+            renderModalStockList(); // Still render defaults
         }
         window.AVAILABLE_STOCKS = availableStocks;
     }
 
     async function loadTopics() {
         try {
-            const res = await fetch('data/ml/topic_definitions.json');
+            const res = await fetch('processed_tweet/topic_definitions.json');
             if (res.ok) {
                 window.TOPIC_DEFINITIONS = await res.json();
                 if (window.updateWordCloud) window.updateWordCloud();
@@ -1695,9 +2077,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    await refreshStockList();
-    await loadTopics();
-    window.refreshStockList = refreshStockList;
+
 
     // DOM Elements
     const combobox = document.getElementById('stock-combobox');
@@ -1719,7 +2099,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // UI: Modal Logic
     const openModal = () => {
         modalOverlay.style.display = 'flex';
-        renderModalStockList();
+        renderModalStockList(); // Ensure list is fresh
         modalTickerInput.focus();
         list.style.display = 'none';
         combobox.classList.remove('open');
@@ -1730,8 +2110,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalTickerInput.value = '';
     };
 
-    const renderModalStockList = () => {
-        modalStockList.innerHTML = '';
+    function renderModalStockList() {
+        const listEl = document.getElementById('modal-stock-list');
+        if (!listEl) return;
+        
+        listEl.innerHTML = '';
+        console.log('Rendering modal stock list with:', availableStocks.length, 'items');
+        
         availableStocks.forEach(s => {
             const li = document.createElement('li');
             li.className = 'modal-stock-item';
@@ -1743,9 +2128,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 selectTicker(s.ticker, s.name);
                 closeModal();
             };
-            modalStockList.appendChild(li);
+            li.onmouseenter = () => {
+                window.reflexChart.highlightTicker(s.ticker);
+            };
+            li.onmouseleave = () => {
+                window.reflexChart.clearTickerHighlight();
+            };
+            listEl.appendChild(li);
         });
-    };
+    }
 
     // UI: Combobox Logic
     const selectTicker = async (ticker, name) => {
@@ -1758,13 +2149,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
     window.selectTickerUI = selectTicker;
 
-    const renderOptions = (filter = '') => {
+    function renderOptions(filter = '') {
         const query = filter.toLowerCase();
         const filtered = availableStocks.filter(s => 
             s.ticker.toLowerCase().includes(query) || 
             s.name.toLowerCase().includes(query)
         );
 
+        if (!list) return;
         list.innerHTML = '';
         
         // Add matching stocks
@@ -1779,6 +2171,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             li.onmousedown = (e) => {
                 e.preventDefault(); // Prevent input from blurring and closing the list
                 selectTicker(s.ticker, s.name);
+            };
+            li.onmouseenter = () => {
+                window.reflexChart.highlightTicker(s.ticker);
+            };
+            li.onmouseleave = () => {
+                window.reflexChart.clearTickerHighlight();
             };
             list.appendChild(li);
         });
@@ -1801,12 +2199,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     // Event Listeners
-    input.addEventListener('focus', () => {
+    input.addEventListener('focus', async () => {
         combobox.classList.add('open');
-        // If the value matches the selected ticker's name, show all options instead of filtering
+        // Refresh the stock list from server whenever the user focuses the input
+        // to ensure new stocks appear immediately.
+        await refreshStockList();
+        // If the value matches the selected ticker's name OR input is empty, show all options
         const stock = availableStocks.find(s => s.ticker === selectedTicker);
-        if (input.value === (stock?.name || selectedTicker)) {
-            renderOptions('');
+        const currentValue = input.value.trim().toLowerCase();
+        const selectedName = (stock?.name || selectedTicker).toLowerCase();
+        
+        if (currentValue === "" || currentValue === selectedName) {
+            renderOptions(''); // Show all
         } else {
             renderOptions(input.value);
         }
@@ -1844,13 +2248,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalFetchBtn.disabled = true;
 
         try {
-            const startYear = modalStartDateInput.value;
-            const endYear = modalEndDateInput.value;
-            
-            let url = `/api/fetch-stock?ticker=${ticker}`;
-            if (startYear) url += `&startYear=${startYear}`;
-            if (endYear) url += `&endYear=${endYear}`;
-
+            const url = `/api/fetch-stock?ticker=${ticker}`;
             const res = await fetch(url);
             
             // Check if response is JSON
@@ -1891,6 +2289,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // Initial Load
+    window.refreshStockList = refreshStockList;
+    await refreshStockList();
+    await loadTopics();
+    renderOptions(); // Populate the dropdown
+    
     // Handle initial selection
     await selectTicker('SP500', 'S&P 500 Index');
 
@@ -1918,4 +2322,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.addEventListener('resize', () => {
         window.reflexChart.reflowActiveChart();
     });
+    window.switchCloudTab = (tab) => {
+        const cloudContainer = document.getElementById('word-cloud-container');
+        const graphContainer = document.getElementById('impact-graph-container');
+        const networkContainer = document.getElementById('stock-network-container');
+        const metricContainer = document.getElementById('graph-metric-container');
+        const subtitle = document.getElementById('cloud-subtitle');
+
+        // Hide all
+        cloudContainer.style.display = 'none';
+        graphContainer.style.display = 'none';
+        networkContainer.style.display = 'none';
+        metricContainer.style.display = 'none';
+
+        if (tab === 'cloud') {
+            cloudContainer.style.display = 'block';
+            subtitle.innerText = 'Click a keyword to pivot the sector chart';
+        } else if (tab === 'graph') {
+            graphContainer.style.display = 'block';
+            metricContainer.style.display = 'flex';
+            subtitle.innerText = 'Analyzing word-tweet relationships based on volume impact';
+            const metric = document.getElementById('graph-metric-selector')?.value || 'impact';
+            window.reflexChart.renderImpactGraph(metric);
+        } else if (tab === 'stocks') {
+            networkContainer.style.display = 'block';
+            subtitle.innerText = 'Exploring company relationships and market dependencies';
+            window.reflexChart.renderStockNetwork();
+        }
+    };
+
+    const graphMetricSelector = document.getElementById('graph-metric-selector');
+    if (graphMetricSelector) {
+        graphMetricSelector.addEventListener('change', (e) => {
+            window.reflexChart.renderImpactGraph(e.target.value);
+        });
+    }
 });

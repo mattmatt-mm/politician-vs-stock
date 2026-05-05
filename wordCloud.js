@@ -178,7 +178,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             window.reflexChart.filterEventsByKeyword(d.text);
                         }
                         
-                        svg.selectAll("text").style("opacity", 0.4);
+                        svg.selectAll("text").style("opacity", 0.5);
                         d3.select(this).style("opacity", 1);
                     }
                 } else {
@@ -189,7 +189,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         window.reflexChart.filterEventsByTopic(d.text);
                         
                         svg.selectAll("text")
-                            .style("opacity", 0.4)
+                            .style("opacity", 0.5)
                             .style("stroke", "none");
                             
                         d3.select(this)
@@ -284,7 +284,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (modeSelector) {
         modeSelector.addEventListener('change', (e) => {
             currentMode = e.target.value;
-            renderCloud();
+            if (currentMode === 'graph' || currentMode === 'stocks') {
+                if (window.switchCloudTab) window.switchCloudTab(currentMode);
+            } else {
+                if (window.switchCloudTab) window.switchCloudTab('cloud');
+                renderCloud();
+            }
         });
     }
 
@@ -295,6 +300,7 @@ document.addEventListener("DOMContentLoaded", () => {
     window.resetWordCloud = function() {
         currentMode = 'keywords';
         if (modeSelector) modeSelector.value = 'keywords';
+        if (window.switchCloudTab) window.switchCloudTab('cloud');
         renderCloud();
     };
 

@@ -11,70 +11,43 @@ app.use(express.static(__dirname));
 
 /**
  * API Endpoint to trigger the Python fetch script
- * Usage: /api/fetch-stock?ticker=NVDA
  */
 app.get('/api/fetch-stock', (req, res) => {
-    const { ticker, startYear, endYear } = req.query;
+    const { ticker } = req.query;
     
     if (!ticker) {
         return res.status(400).json({ error: 'Ticker is required' });
     }
 
     const cleanTicker = ticker.replace(/[^a-z0-9]/gi, '').toUpperCase();
-    const cleanStart = startYear ? startYear.replace(/[^0-9]/g, '') : '';
-    const cleanEnd = endYear ? endYear.replace(/[^0-9]/g, '') : '';
 
-    console.log(`Starting fetch for: ${cleanTicker} (${cleanStart} to ${cleanEnd}, Interval: 1h)`);
+    console.log(`Starting Hybrid fetch for: ${cleanTicker}`);
 
-    // Use .venv python if it exists, otherwise fallback to python3
     const pythonPath = fs.existsSync(path.join(__dirname, '.venv', 'bin', 'python')) 
         ? './.venv/bin/python' 
         : 'python3';
 
-    const command = `${pythonPath} fetch_stock/fetch_stock.py ${cleanTicker} "${cleanStart}" "${cleanEnd}"`;
+    const command = `${pythonPath} fetch_stock/fetch_stock_v2.py ${cleanTicker}`;
 
     exec(command, { cwd: __dirname }, (error, stdout, stderr) => {
         if (error) {
             console.error(`❌ Error executing script: ${error.message}`);
-            console.error(`❌ Stderr: ${stderr}`);
-            return res.status(500).json({ 
-                error: 'Internal Script Error', 
-                message: error.message,
-                details: stderr 
-            });
+            return res.status(500).json({ error: 'Internal Script Error', message: error.message });
         }
 
-        console.log(`Script Output: ${stdout}`);
-        
-        // Extract filename using a stricter regex (no spaces or control chars)
         const filenameMatch = stdout.match(/SUCCESS_FILENAME:([^\s\r\n]+)/);
         const filename = filenameMatch ? filenameMatch[1].trim() : null;
 
         if (filename) {
-            const fetchDir = path.join(__dirname, 'fetch_stock');
-            const filePath = path.join(fetchDir, filename);
-            const exists = fs.existsSync(filePath);
-            
-            console.log(`Checking file: ${filePath} -> exists: ${exists}`);
-
-            if (exists) {
-                res.json({ 
-                    success: true, 
-                    ticker: cleanTicker, 
-                    filename: filename,
-                    message: `Successfully fetched data for ${cleanTicker}`
-                });
+            const processedDir = path.join(__dirname, 'processed_stock');
+            const filePath = path.join(processedDir, filename);
+            if (fs.existsSync(filePath)) {
+                res.json({ success: true, ticker: cleanTicker, filename: filename });
             } else {
-                const filesInDir = fs.readdirSync(fetchDir);
-                res.status(500).json({ 
-                    error: `Script reported success but file was not found.`,
-                    checkedPath: filePath,
-                    filename: filename,
-                    directoryContents: filesInDir
-                });
+                res.status(500).json({ error: `File was not found in processed_stock.` });
             }
         } else {
-            res.status(500).json({ error: 'Script completed but no success filename was reported.', output: stdout });
+            res.status(500).json({ error: 'No success filename reported.', output: stdout });
         }
     });
 });
@@ -86,35 +59,47 @@ const getDiscoveredTickers = () => {
     const stocks = [];
     const seen = new Set();
 
-    const scanDir = (dir, pattern, tickerOverride = null) => {
-        if (!fs.existsSync(dir)) return;
+    const scanDir = (dir, pattern, isProcessed = false) => {
+        console.log(`🔍 Scanning directory: ${dir}`);
+        if (!fs.existsSync(dir)) {
+            console.warn(`⚠️ Directory does not exist: ${dir}`);
+            return;
+        }
+        
         const files = fs.readdirSync(dir);
+        console.log(`📄 Found ${files.length} files in ${path.basename(dir)}`);
+        
         files.forEach(file => {
             const match = file.match(pattern);
-            if (match || tickerOverride) {
-                let ticker = tickerOverride;
-                if (!ticker && match) {
-                    ticker = match[1].toUpperCase().split('_')[0].split(' ')[0];
-                    // Special case for S&P 500
-                    if (file.includes('S&P 500')) ticker = 'SP500';
+            if (match) {
+                let ticker = match[1].toUpperCase();
+                
+                if (!isProcessed) {
+                    ticker = ticker.split('_')[0].split(' ')[0];
                 }
+                
+                if (file.includes('S&P 500') || file.includes('sp500_index')) ticker = 'SP500';
                 
                 if (ticker && !seen.has(ticker)) {
                     seen.add(ticker);
+                    const relPath = path.join(dir, file).replace(__dirname + path.sep, '').replace(/\\/g, '/');
+                    console.log(`✅ Discovered ticker: ${ticker} at ${relPath}`);
                     stocks.push({ 
                         ticker, 
                         name: ticker === 'SP500' ? 'S&P 500 Index' : ticker,
-                        path: path.join(dir, file).replace(__dirname + path.sep, '').replace(/\\/g, '/') 
+                        path: relPath
                     });
                 }
             }
         });
     };
 
-    scanDir(__dirname, /^(.+)_index\.csv$/);
-    scanDir(__dirname, /^(.+)\.csv$/);
-    scanDir(path.join(__dirname, 'local_data'), /^(.+)\.csv$/);
+    scanDir(path.join(__dirname, 'processed_stock'), /^(.+)\.csv$/, true);
     scanDir(path.join(__dirname, 'fetch_stock'), /^(.+)\.csv$/);
+    scanDir(__dirname, /^(.+)_index\.csv$/);
+    scanDir(path.join(__dirname, 'local_data'), /^(.+)\.csv$/);
+    
+    console.log(`📊 Total discovered stocks: ${stocks.length}`);
     return stocks;
 };
 
@@ -122,7 +107,8 @@ const getDiscoveredTickers = () => {
  * API Endpoint to list all available stock data files
  */
 app.get('/api/list-stocks', (req, res) => {
-    res.json(getDiscoveredTickers());
+    const tickers = getDiscoveredTickers();
+    res.json(tickers);
 });
 
 /**
@@ -139,64 +125,50 @@ const TOPIC_STOCK_MAP = {
 };
 
 /**
- * API Endpoint to get stock mention frequencies for the word cloud
- * Uses both direct mentions and semantic topic associations.
+ * API Endpoint to get stock mention frequencies
  */
 app.get('/api/stock-mentions', (req, res) => {
-    const csvPath = path.join(__dirname, 'data/ml/trump_tweets_topics.csv');
+    const csvPath = path.join(__dirname, 'processed_tweet/trump_tweets_topics.csv');
     if (!fs.existsSync(csvPath)) {
         return res.status(404).json({ error: 'Tweet dataset not found' });
     }
 
     const tickers = getDiscoveredTickers().map(s => s.ticker);
-    // Add some common stocks for a better cloud if they aren't discovered
     ['PLTR', 'NVDA', 'TSLA', 'AAPL', 'MSFT', 'BA', 'LMT', 'BTC', 'COIN'].forEach(t => {
         if (!tickers.includes(t)) tickers.push(t);
     });
 
     const fileContent = fs.readFileSync(csvPath, 'utf-8');
     const rows = fileContent.split('\n').slice(1);
-    
-    // 1. Calculate Topic Frequencies
     const topicCounts = {};
     rows.forEach(row => {
         const columns = row.split(',');
-        const topic = columns[columns.length - 1]?.trim(); // dominant_topic is last
-        if (topic) {
-            topicCounts[topic] = (topicCounts[topic] || 0) + 1;
-        }
+        const topic = columns[columns.length - 1]?.trim();
+        if (topic) topicCounts[topic] = (topicCounts[topic] || 0) + 1;
     });
 
-    // 2. Calculate Ticker Scores
     const mentions = tickers.map(ticker => {
         const lowerTicker = ticker.toLowerCase();
-        
-        // Direct mentions in text
         const regex = new RegExp(`\\b${lowerTicker}\\b`, 'gi');
         const directCount = (fileContent.match(regex) || []).length;
-        
-        // Semantic scores from topics
         let semanticScore = 0;
         Object.entries(TOPIC_STOCK_MAP).forEach(([topic, relatedTickers]) => {
             if (relatedTickers.includes(ticker)) {
-                // Add 10% of the topic's total volume as a "mention" score for this stock
                 semanticScore += (topicCounts[topic] || 0) * 0.1;
             }
         });
 
         const totalSize = Math.floor(directCount + semanticScore);
-        
         return {
             text: ticker,
             size: totalSize || Math.floor(Math.random() * 20) + 5,
             category: 'Stock',
-            related_stock: ticker === 'BTC' ? 'SP500' : ticker // BTC uses S&P 500 as proxy for now
+            related_stock: ticker === 'BTC' ? 'SP500' : ticker
         };
     }).filter(m => m.size > 0);
 
-    // Sort by frequency
     mentions.sort((a, b) => b.size - a.size);
-    res.json(mentions.slice(0, 50)); // Limit to top 50
+    res.json(mentions.slice(0, 50));
 });
 
 /**
@@ -237,6 +209,5 @@ app.listen(PORT, () => {
     console.log(`\n=================================================`);
     console.log(`🚀 Server running at http://localhost:${PORT}`);
     console.log(`✅ Serving static files from: ${__dirname}`);
-    console.log(`📡 API ready at http://localhost:${PORT}/api/fetch-stock`);
     console.log(`=================================================\n`);
 });
