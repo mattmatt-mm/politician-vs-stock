@@ -16,6 +16,35 @@ const MARKET_KEYWORDS = {
     ]
 };
 
+/** Bare ticker tokens / extras — aligned with build_word_cloud_data.py. */
+const KEYWORD_CLOUD_EXTRA_TICKERS = ['PLTR', 'AAPL', 'MSFT', 'BA', 'LMT', 'BTC', 'COIN'];
+
+function buildMarketKeywordToTickerMap() {
+    const m = {};
+    Object.entries(MARKET_KEYWORDS).forEach(([ticker, words]) => {
+        words.forEach(w => {
+            m[w.toLowerCase()] = ticker;
+        });
+    });
+    return m;
+}
+
+const MARKET_KEYWORD_TO_TICKER = buildMarketKeywordToTickerMap();
+
+function classifyKeywordForCloud(word) {
+    const w = word.toLowerCase();
+    const directTickers = [...Object.keys(MARKET_KEYWORDS), ...KEYWORD_CLOUD_EXTRA_TICKERS];
+    for (const t of directTickers) {
+        if (w === t.toLowerCase()) {
+            return { category: 'Stock', related_stock: t === 'BTC' ? 'SP500' : t };
+        }
+    }
+    if (MARKET_KEYWORD_TO_TICKER[w]) {
+        return { category: 'Stock', related_stock: MARKET_KEYWORD_TO_TICKER[w] };
+    }
+    return { category: 'General', related_stock: 'SPY' };
+}
+
 // Topic definitions are now loaded dynamically from data/ml/topic_definitions.json
 window.TOPIC_DEFINITIONS = {};
 
@@ -253,7 +282,7 @@ class ReflexChart {
             .trim();
     }
 
-    computeTermFrequency(events) {
+    countWordsInEvents(events) {
         const stopwords = new Set([
             'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
             'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
@@ -275,7 +304,11 @@ class ReflexChart {
             'even', 'well', 'way', 'new', 'say', 'said', 'says', 'tell', 'told',
             'time', 'year', 'years', 'day', 'days', 'today', 'last', 'first',
             'ever', 'never', 'always', 'still', 'already', 'really', 'being',
-            'video', 'image', 'http', 'https', 'com', 'www', 'pic', 'twitter'
+            // Media / URL cruft (plurals & variants — tokens matched exactly)
+            'video', 'videos', 'image', 'images', 'photo', 'photos', 'pic', 'pics',
+            'gif', 'gifs', 'jpg', 'jpeg', 'png', 'thumbnail', 'thumbnails',
+            'media', 'attachment', 'attachments',
+            'http', 'https', 'com', 'www', 'twitter', 'instagram', 'facebook'
         ]);
 
         const freq = {};
@@ -292,6 +325,24 @@ class ReflexChart {
             }
         }
         return freq;
+    }
+
+    computeTermFrequency(events) {
+        return this.countWordsInEvents(events);
+    }
+
+    computeKeywordCloudData(events) {
+        const freq = this.countWordsInEvents(events);
+        const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 100);
+        return sorted.map(([text, size]) => {
+            const meta = classifyKeywordForCloud(text);
+            return {
+                text,
+                size,
+                category: meta.category,
+                related_stock: meta.related_stock
+            };
+        });
     }
 
     async update(tickerSymbol, engine = this.chartEngine, year = this.currentYear) {
@@ -321,6 +372,9 @@ class ReflexChart {
             this.populateTweetStream(normalizedTicker, this.currentEvents);
             if (window.updateTermFrequency) {
                 window.updateTermFrequency(this.computeTermFrequency(this.currentEvents));
+            }
+            if (window.updateKeywordCloud) {
+                window.updateKeywordCloud(this.computeKeywordCloudData(this.currentEvents));
             }
             // Force range reset when changing ticker or year to fix "sticky range" bug
             await this.renderActiveChart(true);
@@ -1095,6 +1149,9 @@ class ReflexChart {
                         if (window.updateTermFrequency) {
                             window.updateTermFrequency(this.computeTermFrequency(filteredEvents));
                         }
+                        if (window.updateKeywordCloud) {
+                            window.updateKeywordCloud(this.computeKeywordCloudData(filteredEvents));
+                        }
                     }
                 }
             },
@@ -1257,6 +1314,9 @@ class ReflexChart {
                         this.populateTweetStream(this.currentTicker, filteredEvents);
                         if (window.updateTermFrequency) {
                             window.updateTermFrequency(this.computeTermFrequency(filteredEvents));
+                        }
+                        if (window.updateKeywordCloud) {
+                            window.updateKeywordCloud(this.computeKeywordCloudData(filteredEvents));
                         }
                     }
                 }

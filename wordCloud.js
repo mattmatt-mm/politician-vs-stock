@@ -26,13 +26,8 @@ document.addEventListener("DOMContentLoaded", () => {
         .style("box-shadow", "0 10px 15px -3px rgba(0, 0, 0, 0.1)");
 
     function initCloud() {
-        fetch('word_cloud_data.json')
-            .then(response => response.json())
-            .then(data => {
-                keywordData = data.slice(0, 100);
-                if (currentMode === 'keywords') renderCloud();
-            });
-            
+        // Keyword entries come from window.updateKeywordCloud (ReflexChart: same event set as term frequency).
+
         fetch('/api/stock-mentions')
             .then(response => response.json())
             .then(data => {
@@ -50,15 +45,41 @@ document.addEventListener("DOMContentLoaded", () => {
             .catch(err => console.warn('Could not fetch term frequency:', err));
     }
 
+    /** Highcharts leaves wrapper divs on #word-cloud-container; removing only svg breaks layout when switching modes. */
+    function destroyCloudHighcharts() {
+        if (typeof Highcharts === 'undefined') return;
+        const idx = Highcharts.charts.findIndex(
+            c => c && c.renderTo && c.renderTo.id === 'word-cloud-container'
+        );
+        if (idx !== -1 && Highcharts.charts[idx]) {
+            Highcharts.charts[idx].destroy();
+        }
+    }
+
     function renderCloud() {
         if (currentMode === 'terms-bar') {
             renderBarChart();
             return;
         }
-        if (currentMode === 'keywords' && !keywordData) return;
-        if (currentMode === 'stocks' && !stocksData) return;
 
-        // Clear previous SVG
+        destroyCloudHighcharts();
+        if (container) container.innerHTML = '';
+
+        if (currentMode === 'keywords' && keywordData === null) {
+            if (container) {
+                container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--zinc-500);">Loading keywords…</div>';
+            }
+            return;
+        }
+        if (currentMode === 'keywords' && keywordData.length === 0) {
+            if (container) {
+                container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--zinc-500);">No keywords in the current chart range.</div>';
+            }
+            return;
+        }
+        if (currentMode === 'stocks' && (!stocksData || stocksData.length === 0)) return;
+
+        // Clear previous SVG (redundant after innerHTML clear; kept for safety if container logic changes)
         d3.select("#word-cloud-container svg").remove();
         
         const width = container.clientWidth;
@@ -67,8 +88,12 @@ document.addEventListener("DOMContentLoaded", () => {
         let words = [];
         
         if (currentMode === 'keywords') {
+            const minS = d3.min(keywordData, d => d.size);
+            const maxS = d3.max(keywordData, d => d.size);
+            const lo = minS === maxS ? minS - 1 : minS;
+            const hi = minS === maxS ? maxS + 1 : maxS;
             const sizeScale = d3.scaleLinear()
-                .domain([d3.min(keywordData, d => d.size), d3.max(keywordData, d => d.size)])
+                .domain([lo, hi])
                 .range([16, 80]);
                 
             words = keywordData.map(d => ({
@@ -79,8 +104,12 @@ document.addEventListener("DOMContentLoaded", () => {
             }));
         } else if (currentMode === 'stocks') {
             const data = stocksData || [];
+            const minZ = d3.min(data, d => d.size) || 0;
+            const maxZ = d3.max(data, d => d.size) || 1;
+            const z0 = minZ === maxZ ? minZ - 1 : minZ;
+            const z1 = minZ === maxZ ? maxZ + 1 : maxZ;
             const sizeScale = d3.scaleLinear()
-                .domain([d3.min(data, d => d.size) || 0, d3.max(data, d => d.size) || 1])
+                .domain([z0, z1])
                 .range([24, 90]);
                 
             words = data.map(d => ({
@@ -202,12 +231,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function renderBarChart() {
-        // Clear D3 word cloud SVG
-        d3.select("#word-cloud-container svg").remove();
-
-        // Clear any existing Highcharts chart
-        const existingChart = Highcharts.charts.find(c => c && c.renderTo && c.renderTo.id === 'word-cloud-container');
-        if (existingChart) existingChart.destroy();
+        destroyCloudHighcharts();
+        if (container) container.innerHTML = '';
 
         if (!termFreqData || Object.keys(termFreqData).length === 0) {
             container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--zinc-500);">No term frequency data available. Run compute_term_frequency.py first.</div>';
@@ -289,7 +314,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     window.addEventListener('resize', () => {
-        if (keywordData || stocksData || termFreqData) renderCloud();
+        if (keywordData !== null || stocksData || termFreqData) renderCloud();
     });
 
     window.resetWordCloud = function() {
@@ -302,6 +327,19 @@ document.addEventListener("DOMContentLoaded", () => {
         termFreqData = freqData;
         if (currentMode === 'terms-bar') {
             renderBarChart();
+        }
+    };
+
+    window.updateKeywordCloud = function(rows) {
+        keywordData = Array.isArray(rows) ? rows : [];
+        if (currentMode === 'keywords') {
+            renderCloud();
+        }
+    };
+
+    window.updateWordCloud = function() {
+        if (currentMode === 'topics') {
+            renderCloud();
         }
     };
 
