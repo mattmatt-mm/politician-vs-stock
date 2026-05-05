@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## [Completed] Search Cloud: Processed Tweet Source, Dynamic Keywords & Mode Fixes
+
+### Goal
+1. Drive all tweet-derived search-cloud preprocessing from **`data/ml/trump_tweets_topics.csv`** (not raw CSV) for Python artifacts, and align tokenization across scripts.
+2. Make the **keyword** word cloud use the **same tweet events** and **visible Highcharts range** as the term-frequency bar (year, ticker, pan/zoom).
+3. Fix blank panels when switching cloud modes after **Term Frequency** (Highcharts teardown).
+4. Strip **media / URL noise** (e.g. `image`, `images`, `video`, `videos`) consistently in browser counts and Python tokenization.
+
+### Changes
+
+| Date | File | Change | Status |
+|------|------|--------|--------|
+| 2026-05-05 | `tweet_tokenizer.py` | New — NLTK cleaning + shared `STOP_WORDS` / `filter_tokens()` for Python word stats | ✅ Done |
+| 2026-05-05 | `tweet_tokenizer.py` | `CUSTOM_STOPWORDS` extended with media tokens (aligned with `script.js`) | ✅ Done |
+| 2026-05-05 | `compute_term_frequency.py` | Input → `data/ml/trump_tweets_topics.csv`; imports `tweet_tokenizer` (run after `extract_topics.py`) | ✅ Done |
+| 2026-05-05 | `build_word_cloud_data.py` | New — optional `data/ml/word_cloud_keywords.json` from processed CSV (not used by live keyword mode) | ✅ Done |
+| 2026-05-05 | `script.js` | `countWordsInEvents` / `computeTermFrequency` / `computeKeywordCloudData`; `classifyKeywordForCloud` + `KEYWORD_CLOUD_EXTRA_TICKERS` | ✅ Done |
+| 2026-05-05 | `script.js` | `update()` + both `afterSetExtremes` handlers: `window.updateKeywordCloud(computeKeywordCloudData(...))` | ✅ Done |
+| 2026-05-05 | `script.js` | Expanded stopwords in `countWordsInEvents` for media plurals & attachments | ✅ Done |
+| 2026-05-05 | `wordCloud.js` | Keywords from `updateKeywordCloud` only (no static `word_cloud_keywords.json` fetch); loading / empty messages | ✅ Done |
+| 2026-05-05 | `wordCloud.js` | `destroyCloudHighcharts()` + clear container when leaving Term Frequency; stable D3 scales when min=max | ✅ Done |
+| 2026-05-05 | `wordCloud.js` | `window.updateWordCloud()` — re-render Topics mode after topic definitions load | ✅ Done |
+| 2026-05-05 | `CLAUDE.md` | Pipeline order (`build_word_cloud_data.py`); word-cloud behavior & keyword vs static artifact note | ✅ Done |
+
+---
+
 ## [Completed] Dynamic Term Frequency (Range-Responsive)
 
 ### Goal
