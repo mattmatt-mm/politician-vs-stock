@@ -27,22 +27,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function initCloud() {
         // Keyword entries come from window.updateKeywordCloud (ReflexChart: same event set as term frequency).
-
-        fetch('/api/stock-mentions')
-            .then(response => response.json())
-            .then(data => {
-                stocksData = data;
-                if (currentMode === 'stocks') renderCloud();
-            })
-            .catch(err => console.warn('Could not fetch stock mentions:', err));
-
-        fetch('/api/term-frequency')
-            .then(response => response.json())
-            .then(data => {
-                termFreqData = data;
-                if (currentMode === 'terms-bar') renderBarChart();
-            })
-            .catch(err => console.warn('Could not fetch term frequency:', err));
+        if (currentMode === 'keywords' && keywordData) {
+            renderCloud();
+        }
     }
 
     /** Highcharts leaves wrapper divs on #word-cloud-container; removing only svg breaks layout when switching modes. */
