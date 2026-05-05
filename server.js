@@ -111,6 +111,7 @@ const getDiscoveredTickers = () => {
         });
     };
 
+    scanDir(path.join(__dirname, 'processed_stock'), /^(.+)\.csv$/);
     scanDir(__dirname, /^(.+)_index\.csv$/);
     scanDir(__dirname, /^(.+)\.csv$/);
     scanDir(path.join(__dirname, 'local_data'), /^(.+)\.csv$/);

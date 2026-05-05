@@ -107,7 +107,7 @@
                     <div class="chart-header">
                         <div>
                             <h2 class="display-header">Search <span class="emphasis-italic">Cloud</span></h2>
-                            <p class="subtitle">Click a keyword to pivot the sector chart</p>
+                            <p class="subtitle" id="cloud-subtitle">Click a keyword to pivot the sector chart</p>
                         </div>
                         <div class="controls-row">
                             <div class="selector-container">
@@ -117,16 +117,26 @@
                                     <option value="topics">Topics</option>
                                     <option value="stocks">Stocks</option>
                                     <option value="terms-bar">Term Frequency</option>
+                                    <option value="graph">Impact Graph</option>
                                 </select>
                             </div>
 
-                            <button id="reset-dashboard-btn" class="reset-button" onclick="window.reflexChart.resetDashboard()">
-                                <i data-lucide="rotate-ccw" style="width: 14px; height: 14px; margin-right: 6px; stroke-width: 2.5px;"></i>
-                                Reset All
+                            <div id="graph-metric-container" class="selector-container" style="display: none;">
+                                <label class="control-label" for="graph-metric-selector">Intensity</label>
+                                <select id="graph-metric-selector" class="stock-select">
+                                    <option value="frequency">Mention Frequency</option>
+                                    <option value="impact" selected>Volume Impact</option>
+                                </select>
+                            </div>
+
+                            <button id="reset-dashboard-btn" class="reset-button" onclick="window.reflexChart.resetDashboard()" title="Reset All">
+                                <i data-lucide="rotate-ccw" style="width: 14px; height: 14px; stroke-width: 2.5px;"></i>
                             </button>
                         </div>
                     </div>
                     <div class="chart-container" id="word-cloud-container" style="flex: 1; height: 400px;"></div>
+                    <div class="chart-container" id="impact-graph-container" style="flex: 1; height: 400px; display: none;"></div>
+                    <div class="chart-container" id="stock-network-container" style="flex: 1; height: 400px; display: none;"></div>
                 </div>
 
                 <!-- Tweet Stream Area -->
@@ -214,6 +224,8 @@
 
     <script src="script.js"></script>
     <script src="wordCloud.js"></script>
+    <script src="relationshipGraph.js"></script>
+    <script src="stockNetwork.js"></script>
     <script>
         lucide.createIcons();
     </script>

@@ -309,7 +309,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (modeSelector) {
         modeSelector.addEventListener('change', (e) => {
             currentMode = e.target.value;
-            renderCloud();
+            if (currentMode === 'graph' || currentMode === 'stocks') {
+                if (window.switchCloudTab) window.switchCloudTab(currentMode);
+            } else {
+                if (window.switchCloudTab) window.switchCloudTab('cloud');
+                renderCloud();
+            }
         });
     }
 
@@ -320,6 +325,7 @@ document.addEventListener("DOMContentLoaded", () => {
     window.resetWordCloud = function() {
         currentMode = 'keywords';
         if (modeSelector) modeSelector.value = 'keywords';
+        if (window.switchCloudTab) window.switchCloudTab('cloud');
         renderCloud();
     };
 
@@ -327,6 +333,10 @@ document.addEventListener("DOMContentLoaded", () => {
         termFreqData = freqData;
         if (currentMode === 'terms-bar') {
             renderBarChart();
+        } else if (currentMode === 'keywords' || currentMode === 'topics') {
+            if (!container.querySelector('svg') && (keywordData || stocksData)) {
+                renderCloud();
+            }
         }
     };
 

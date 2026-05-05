@@ -914,3 +914,51 @@ h2.display-header {
     align-items: flex-end;
     gap: 12px;
 }
+
+.graph-node {
+    cursor: pointer;
+    transition: filter 0.2s;
+}
+
+.graph-node:hover {
+    filter: brightness(1.1);
+}
+
+.graph-node circle {
+    stroke-width: 2px;
+}
+
+.graph-link {
+    stroke: var(--zinc-200);
+    stroke-opacity: 0.6;
+}
+
+.graph-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    pointer-events: none;
+    fill: var(--zinc-800);
+}
+
+.node-tweet circle {
+    stroke: var(--zinc-300);
+}
+
+.node-word circle {
+    stroke: var(--zinc-400);
+}
+
+.graph-tooltip {
+    position: absolute;
+    padding: 12px;
+    background: #FFFFFF;
+    border: 1px solid var(--zinc-200);
+    border-radius: 8px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    pointer-events: none;
+    z-index: 1000;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    max-width: 300px;
+}

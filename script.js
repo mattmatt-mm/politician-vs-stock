@@ -109,6 +109,9 @@ class ReflexChart {
         this.selectedEventId = null;
         this.currentWindowMs = null;
         this.highlightedTicker = null;
+        this.impactGraph = new RelationshipGraph('impact-graph-container');
+        this.stockNetwork = new StockNetwork('stock-network-container');
+        this.currentImpactfulWords = new Map();
 
         this.sciChartSurface = null;
         this.wasmContext = null;
@@ -383,6 +386,14 @@ class ReflexChart {
             }
             // Force range reset when changing ticker or year to fix "sticky range" bug
             await this.renderActiveChart(true);
+
+            const mode = document.getElementById('cloud-mode-selector')?.value;
+            if (mode === 'graph') {
+                const metric = document.getElementById('graph-metric-selector')?.value || 'impact';
+                this.renderImpactGraph(metric);
+            } else if (mode === 'stocks') {
+                this.renderStockNetwork();
+            }
         } catch (e) {
             console.error('Failed to update dashboard', e);
         }
@@ -428,6 +439,8 @@ class ReflexChart {
         }
 
         const possiblePaths = [
+            `processed_stock/${tickerSymbol}.csv`,
+            `processed_stock/${tickerSymbol}_60min.csv`,
             `local_data/${tickerSymbol}_60min.csv`,
             `fetch_stock/${tickerSymbol}.csv`,
             `fetch_stock/${tickerSymbol}_last_1mo.csv`,
@@ -498,7 +511,18 @@ class ReflexChart {
     }
 
     async loadSp500IndexData() {
-        const rows = await d3.csv('local_data/sp500_index.csv');
+        let rows = [];
+        const sp500Paths = ['processed_stock/sp500_index.csv', 'local_data/sp500_index.csv'];
+        for (const path of sp500Paths) {
+            try {
+                const checkRes = await fetch(path, { method: 'HEAD' });
+                if (!checkRes.ok) continue;
+                rows = await d3.csv(path);
+                if (rows.length > 0) break;
+            } catch (e) {
+                // Try next path.
+            }
+        }
 
         return rows
             .map(row => {
@@ -1087,15 +1111,16 @@ class ReflexChart {
             return;
         }
 
-        const hasVolume = data[0]?.volume !== undefined && data.some(d => d.volume > 0);
-        const rawCandleData = data.map(d => [
+        const candleData = data.map(d => [
             d.date.getTime(),
             d.open,
             d.high,
             d.low,
-            d.close
+            d.close,
+            d.volume || 0
         ]);
-        const volumeData = hasVolume ? data.map(d => [d.date.getTime(), d.volume || 0]) : [];
+        const volumeData = candleData.map(point => [point[0], point[5] || 0]);
+        const ohlcData = candleData.map(point => [point[0], point[1], point[2], point[3], point[4]]);
 
         const visibleEvents = this.eventsInDataRange(events, data);
         const defaultWindow = this.defaultWindowMs(data);
@@ -1108,49 +1133,6 @@ class ReflexChart {
         }
 
         const reflex = this;
-
-        // Layout: tweet strip (0-10%), price (10-72%), volume (74-94%) when available
-        const priceHeight = hasVolume ? '62%' : HC_PRICE_Y_AXIS_HEIGHT_PCT;
-        const volumeTop = '74%';
-        const volumeHeight = '20%';
-
-        const yAxes = [
-            {
-                opposite: true,
-                top: HC_PRICE_Y_AXIS_TOP_PCT,
-                height: priceHeight,
-                resize: { enabled: false },
-                gridLineColor: '#F4F4F5',
-                labels: { style: { color: '#52525B' } }
-            },
-            {
-                opposite: true,
-                top: '0%',
-                height: HC_TWEET_STRIP_HEIGHT_PCT,
-                offset: 0,
-                min: 0,
-                max: 1,
-                visible: false,
-                gridLineWidth: 0,
-                minorGridLineWidth: 0,
-                labels: { enabled: false },
-                title: { text: null },
-                tickLength: 0,
-                lineWidth: 0
-            }
-        ];
-        if (hasVolume) {
-            yAxes.push({
-                opposite: true,
-                top: volumeTop,
-                height: volumeHeight,
-                offset: 0,
-                lineWidth: 1,
-                gridLineColor: '#F4F4F5',
-                labels: { align: 'right', x: -3, style: { color: '#A1A1AA', fontSize: '9px' } },
-                title: { text: null }
-            });
-        }
 
         this.highChart = Highcharts.stockChart(this.highchartsContainerId, {
             chart: {
@@ -1176,13 +1158,17 @@ class ReflexChart {
             rangeSelector: { enabled: false },
             title: { text: null },
             legend: { enabled: false },
-            xAxis: {
+            xAxis: [{
                 min,
                 max: actualMax,
                 ordinal: false,
                 crosshair: true,
                 lineColor: '#E4E4E7',
                 tickColor: '#E4E4E7',
+                labels: {
+                    enabled: true,
+                    style: { color: '#71717A', fontSize: '10px' }
+                },
                 plotLines: visibleEvents.filter(event => {
                     return this.showVerticalLines || (this.selectedEventId && event.id === this.selectedEventId);
                 }).map(event => {
@@ -1217,26 +1203,72 @@ class ReflexChart {
                         }
                     }
                 }
-            },
-            yAxis: yAxes,
+            }, {
+                opposite: true,
+                linkedTo: 0,
+                lineWidth: 0,
+                tickWidth: 0,
+                labels: {
+                    enabled: true,
+                    style: { color: '#71717A', fontSize: '10px' },
+                    y: -5
+                },
+                gridLineWidth: 0
+            }],
+            yAxis: [{
+                labels: { enabled: false },
+                title: { text: null },
+                height: HC_TWEET_STRIP_HEIGHT_PCT,
+                offset: 0,
+                lineWidth: 0,
+                gridLineWidth: 0,
+                opposite: true,
+                min: 0,
+                max: 1
+            }, {
+                labels: { align: 'right', x: -3 },
+                title: { text: 'Price' },
+                top: HC_PRICE_Y_AXIS_TOP_PCT,
+                height: '75%',
+                lineWidth: 1,
+                resize: { enabled: true },
+                opposite: true,
+                gridLineColor: '#F4F4F5',
+                growBy: [0.05, 0.05]
+            }, {
+                labels: { align: 'right', x: -3 },
+                title: { text: 'Volume' },
+                top: '85%',
+                height: '15%',
+                offset: 0,
+                lineWidth: 1,
+                opposite: true,
+                gridLineColor: '#F4F4F5'
+            }],
             tooltip: {
-                split: false,
-                shared: true,
+                split: true,
+                shared: false,
                 useHTML: true,
                 borderColor: '#E4E4E7',
                 formatter: function formatter() {
-                    const point = this.point || this.points?.[0]?.point;
+                    const point = this.point;
                     if (!point) return false;
                     if (point.series.options.id === 'tweet-markers') {
                         return point.tooltipHtml || false;
                     }
-                    if (point.series.options.id === `${ticker}-volume`) {
-                        return `<strong>${Highcharts.dateFormat('%b %e, %Y %H:%M', point.x)}</strong><br>Volume: ${point.y?.toLocaleString()}`;
+                    if (point.series.type === 'candlestick') {
+                        return `
+                            <strong>${Highcharts.dateFormat('%b %e, %Y %H:%M', point.x)}</strong><br>
+                            Open ${point.open?.toFixed(2)} | High ${point.high?.toFixed(2)}<br>
+                            Low ${point.low?.toFixed(2)} | Close ${point.close?.toFixed(2)}
+                        `;
+                    }
+                    if (point.series.options.id.includes('-volume')) {
+                        return `<strong>Volume:</strong> ${point.y.toLocaleString()}`;
                     }
                     return `
-                        <strong>${Highcharts.dateFormat('%b %e, %Y %H:%M', point.x)}</strong><br>
-                        Open ${point.open?.toFixed(2)} | High ${point.high?.toFixed(2)}<br>
-                        Low ${point.low?.toFixed(2)} | Close ${point.close?.toFixed(2)}
+                        <strong>${Highcharts.dateFormat('%b %e, %Y', point.x)}</strong><br>
+                        Price ${Number(point.y).toFixed(2)}
                     `;
                 }
             },
@@ -1279,10 +1311,10 @@ class ReflexChart {
                     type: 'candlestick',
                     id: `${ticker}-candles`,
                     name: ticker,
-                    yAxis: 0,
-                    data: rawCandleData
+                    yAxis: 1,
+                    data: ohlcData
                 },
-                ...(hasVolume ? [{
+                {
                     type: 'column',
                     id: `${ticker}-volume`,
                     name: 'Volume',
@@ -1290,7 +1322,7 @@ class ReflexChart {
                     yAxis: 2,
                     color: '#D4D4D8',
                     borderColor: 'transparent'
-                }] : []),
+                },
                 ...this.highchartsTweetScatterSeries(visibleEvents)
             ]
         });
@@ -1309,7 +1341,7 @@ class ReflexChart {
             point.date.getTime(),
             point.break ? null : point.close
         ]);
-        const hasVolume = data[0]?.volume !== undefined && data.some(d => d.volume > 0);
+        const hasVolume = data[0]?.volume !== undefined;
         const volumeData = hasVolume ? data.map(p => [p.date.getTime(), p.volume || 0]) : [];
 
         if (this.highChart) {
@@ -1317,7 +1349,6 @@ class ReflexChart {
         }
 
         const reflex = this;
-        const priceHeight = hasVolume ? '62%' : HC_PRICE_Y_AXIS_HEIGHT_PCT;
 
         this.highChart = Highcharts.stockChart(this.highchartsContainerId, {
             chart: {
@@ -1343,13 +1374,14 @@ class ReflexChart {
             rangeSelector: { enabled: false },
             title: { text: null },
             legend: { enabled: false },
-            xAxis: {
+            xAxis: [{
                 min,
                 max: actualMax,
                 ordinal: false,
                 crosshair: true,
                 lineColor: '#E4E4E7',
                 tickColor: '#E4E4E7',
+                labels: { style: { color: '#71717A', fontSize: '10px' } },
                 plotLines: visibleEvents.filter(event => {
                     return this.showVerticalLines || (this.selectedEventId && event.id === this.selectedEventId);
                 }).map(event => {
@@ -1384,59 +1416,78 @@ class ReflexChart {
                         }
                     }
                 }
-            },
-            yAxis: [
-                {
-                    opposite: true,
-                    top: HC_PRICE_Y_AXIS_TOP_PCT,
-                    height: priceHeight,
-                    resize: { enabled: false },
-                    gridLineColor: '#F4F4F5',
-                    labels: { style: { color: '#52525B' } }
+            }, {
+                opposite: true,
+                linkedTo: 0,
+                lineWidth: 0,
+                tickWidth: 0,
+                labels: {
+                    enabled: true,
+                    style: { color: '#71717A', fontSize: '10px' },
+                    y: -5
                 },
-                {
-                    opposite: true,
-                    top: '0%',
-                    height: HC_TWEET_STRIP_HEIGHT_PCT,
-                    offset: 0,
-                    min: 0,
-                    max: 1,
-                    visible: false,
-                    gridLineWidth: 0,
-                    minorGridLineWidth: 0,
-                    labels: { enabled: false },
-                    title: { text: null },
-                    tickLength: 0,
-                    lineWidth: 0
-                },
-                ...(hasVolume ? [{
-                    opposite: true,
-                    top: '74%',
-                    height: '20%',
-                    offset: 0,
-                    lineWidth: 1,
-                    gridLineColor: '#F4F4F5',
-                    labels: { align: 'right', x: -3, style: { color: '#A1A1AA', fontSize: '9px' } },
-                    title: { text: null }
-                }] : [])
-            ],
+                gridLineWidth: 0
+            }],
+            yAxis: hasVolume ? [{
+                labels: { enabled: false },
+                title: { text: null },
+                height: HC_TWEET_STRIP_HEIGHT_PCT,
+                offset: 0,
+                lineWidth: 0,
+                gridLineWidth: 0,
+                opposite: true,
+                min: 0,
+                max: 1
+            }, {
+                top: HC_PRICE_Y_AXIS_TOP_PCT,
+                height: '75%',
+                lineWidth: 1,
+                opposite: true,
+                gridLineColor: '#F4F4F5',
+                growBy: [0.05, 0.05]
+            }, {
+                top: '85%',
+                height: '15%',
+                offset: 0,
+                lineWidth: 1,
+                opposite: true,
+                gridLineColor: '#F4F4F5'
+            }
+            ] : [{
+                labels: { enabled: false },
+                title: { text: null },
+                height: HC_TWEET_STRIP_HEIGHT_PCT,
+                offset: 0,
+                lineWidth: 0,
+                gridLineWidth: 0,
+                opposite: true,
+                min: 0,
+                max: 1
+            }, {
+                top: HC_PRICE_Y_AXIS_TOP_PCT,
+                height: HC_PRICE_Y_AXIS_HEIGHT_PCT,
+                opposite: true,
+                gridLineColor: '#F4F4F5',
+                labels: { style: { color: '#52525B' } },
+                growBy: [0.05, 0.05]
+            }],
             tooltip: {
-                split: false,
-                shared: true,
+                split: true,
+                shared: false,
                 useHTML: true,
                 borderColor: '#E4E4E7',
                 formatter: function formatter() {
-                    const point = this.point || this.points?.[0]?.point;
+                    const point = this.point;
                     if (!point) return false;
                     if (point.series.options.id === 'tweet-markers') {
                         return point.tooltipHtml || false;
                     }
-                    if (point.series.options.id === `${ticker}-volume`) {
-                        return `<strong>${Highcharts.dateFormat('%b %e, %Y', point.x)}</strong><br>Volume: ${point.y?.toLocaleString()}`;
+                    if (point.series.options.id.includes('-volume')) {
+                        return `<strong>Volume:</strong> ${point.y.toLocaleString()}`;
                     }
                     return `
-                        <strong>${Highcharts.dateFormat('%b %e, %Y', point.x)}</strong><br>
-                        S&P 500 ${Number(point.y).toFixed(2)}
+                        <strong>${Highcharts.dateFormat('%b %e, %Y %H:%M', point.x)}</strong><br>
+                        Price ${Number(point.y).toFixed(2)}
                     `;
                 }
             },
@@ -1472,7 +1523,7 @@ class ReflexChart {
                     type: 'line',
                     id: `${ticker}-line`,
                     name: 'S&P 500',
-                    yAxis: 0,
+                    yAxis: 1,
                     data: lineData,
                     color: '#27272A',
                     lineWidth: 2,
@@ -1505,6 +1556,131 @@ class ReflexChart {
         this.renderActiveChart();
     }
 
+    scrollToTweet(eventId) {
+        this.highlightTweetInStream(String(eventId));
+    }
+
+    renderImpactGraph(metric = 'impact') {
+        const data = this.getGraphData();
+        this.impactGraph.render(data, metric);
+    }
+
+    getGraphData() {
+        const stopWords = new Set([
+            'the', 'and', 'for', 'this', 'that', 'with', 'from', 'have', 'been', 'will', 'are', 'was',
+            'were', 'our', 'has', 'your', 'their', 'they', 'into', 'over', 'more', 'about', 'just',
+            'very', 'only', 'than', 'could', 'should', 'would'
+        ]);
+        const nodes = [];
+        const links = [];
+        const wordNodes = new Map();
+
+        const impactfulTweets = [...this.currentEvents]
+            .sort((a, b) => Math.abs(b.reaction.value) - Math.abs(a.reaction.value))
+            .slice(0, 15);
+
+        impactfulTweets.forEach(tweet => {
+            const tweetId = `tweet-${tweet.id}`;
+            const impact = Math.abs(tweet.reaction.value) || 1;
+
+            nodes.push({
+                id: tweetId,
+                type: 'tweet',
+                sentiment: tweet.sentiment.direction,
+                fullText: tweet.text,
+                impactScore: impact,
+                size: 6 + (Math.min(impact, 5) * 4)
+            });
+
+            const words = tweet.text.toLowerCase()
+                .replace(/[^\w\s]/gi, '')
+                .split(' ')
+                .filter(word => word.length > 3 && !stopWords.has(word));
+
+            const uniqueWords = [...new Set(words)];
+            uniqueWords.forEach(word => {
+                if (!wordNodes.has(word)) {
+                    wordNodes.set(word, {
+                        id: word,
+                        type: 'word',
+                        count: 0,
+                        impactScore: 0,
+                        size: 8
+                    });
+                }
+
+                const wordNode = wordNodes.get(word);
+                wordNode.count += 1;
+                wordNode.impactScore += impact;
+                wordNode.size += 2;
+
+                links.push({
+                    source: tweetId,
+                    target: word,
+                    value: 2
+                });
+            });
+        });
+
+        nodes.push(...Array.from(wordNodes.values()));
+        this.currentImpactfulWords = wordNodes;
+        return { nodes, links };
+    }
+
+    async renderStockNetwork() {
+        const data = await this.getStockNetworkData();
+        this.stockNetwork.render(data);
+    }
+
+    async getStockNetworkData() {
+        const centerTicker = this.currentTicker;
+        const nodes = [{ id: centerTicker, isCenter: true }];
+        const links = [];
+        const seenNodes = new Set([centerTicker]);
+
+        const topicMap = {
+            'National Security': ['PLTR', 'LMT', 'BA', 'RTX'],
+            'Technology & Crypto': ['TSLA', 'NVDA', 'BTC', 'COIN', 'MSFT'],
+            'Economy & Trade': ['SP500', 'DJIA', 'GOLD', 'AAPL', 'AMZN'],
+            'Energy & Border': ['TSLA', 'XOM', 'CVX', 'NEE', 'F'],
+            'Healthcare & Misc': ['UNH', 'JNJ', 'PFE'],
+            'Global Relations': ['BA', 'CAT', 'SP500'],
+            'Political Strategy': ['SP500', 'DJIA']
+        };
+
+        const centerTopics = Object.entries(topicMap)
+            .filter(([, tickers]) => tickers.includes(centerTicker))
+            .map(([topic]) => topic);
+
+        centerTopics.forEach(topic => {
+            topicMap[topic].forEach(ticker => {
+                if (ticker !== centerTicker && window.AVAILABLE_STOCKS?.some(stock => stock.ticker === ticker)) {
+                    if (!seenNodes.has(ticker)) {
+                        nodes.push({ id: ticker, isCenter: false });
+                        seenNodes.add(ticker);
+                    }
+                    links.push({
+                        source: centerTicker,
+                        target: ticker,
+                        reason: `Related via ${topic}`
+                    });
+                }
+            });
+        });
+
+        if (nodes.length === 1) {
+            (window.AVAILABLE_STOCKS || []).slice(0, 5).forEach(stock => {
+                if (stock.ticker !== centerTicker && !seenNodes.has(stock.ticker)) {
+                    nodes.push({ id: stock.ticker, isCenter: false });
+                    seenNodes.add(stock.ticker);
+                    links.push({ source: centerTicker, target: stock.ticker, reason: 'Market Peer' });
+                }
+            });
+        }
+
+        return { nodes, links };
+    }
+
     tweetTooltipHtml(event) {
         const meta = SENTIMENT_META[event.sentiment.direction];
         const dateLabel = Highcharts.dateFormat('%b %e, %Y %H:%M', event.date.getTime());
@@ -1526,7 +1702,7 @@ class ReflexChart {
                 type: 'scatter',
                 id: 'tweet-markers',
                 name: 'Tweet markers',
-                yAxis: 1,
+                yAxis: 0,
                 xAxis: 0,
                 showInNavigator: false,
                 clip: true,
@@ -1724,6 +1900,41 @@ class ReflexChart {
             `;
 
             card.addEventListener('click', () => {
+                const mode = document.getElementById('cloud-mode-selector')?.value;
+                if (mode === 'graph' && this.currentImpactfulWords.size > 0) {
+                    const wordsInTweet = event.text.toLowerCase()
+                        .replace(/[^\w\s]/gi, '')
+                        .split(' ')
+                        .filter(word => this.currentImpactfulWords.has(word));
+
+                    if (wordsInTweet.length > 0) {
+                        const targetWord = wordsInTweet.reduce((left, right) =>
+                            (this.currentImpactfulWords.get(left).impactScore > this.currentImpactfulWords.get(right).impactScore) ? left : right
+                        );
+                        const allRelated = this.currentEvents.filter(item =>
+                            item.text.toLowerCase().includes(targetWord)
+                        );
+                        const currentIndex = allRelated.findIndex(item => item.id === event.id);
+                        if (currentIndex !== -1) {
+                            const start = Math.max(0, currentIndex - 5);
+                            const end = Math.min(allRelated.length, currentIndex + 6);
+                            const windowedEvents = allRelated.slice(start, end);
+
+                            this.selectedEventId = event.id;
+                            this.renderFilteredStream(windowedEvents, `Keyword context: ${targetWord}`);
+
+                            setTimeout(() => {
+                                const newCard = container.querySelector(`[data-event-id="${event.id}"]`);
+                                if (newCard) newCard.classList.add('active');
+                            }, 100);
+
+                            this.panToDate(event.date);
+                            this.renderActiveChart();
+                            return;
+                        }
+                    }
+                }
+
                 this.selectedEventId = event.id;
                 
                 // Highlight visually
@@ -2080,6 +2291,42 @@ document.addEventListener('DOMContentLoaded', async () => {
         verticalLinesToggle.addEventListener('change', event => {
             window.reflexChart.showVerticalLines = event.target.checked;
             window.reflexChart.renderActiveChart();
+        });
+    }
+
+    window.switchCloudTab = (tab) => {
+        const cloudContainer = document.getElementById('word-cloud-container');
+        const graphContainer = document.getElementById('impact-graph-container');
+        const networkContainer = document.getElementById('stock-network-container');
+        const metricContainer = document.getElementById('graph-metric-container');
+        const subtitle = document.getElementById('cloud-subtitle');
+        if (!cloudContainer || !graphContainer || !networkContainer || !metricContainer || !subtitle) return;
+
+        cloudContainer.style.display = 'none';
+        graphContainer.style.display = 'none';
+        networkContainer.style.display = 'none';
+        metricContainer.style.display = 'none';
+
+        if (tab === 'cloud') {
+            cloudContainer.style.display = 'block';
+            subtitle.innerText = 'Click a keyword to pivot the sector chart';
+        } else if (tab === 'graph') {
+            graphContainer.style.display = 'block';
+            metricContainer.style.display = 'flex';
+            subtitle.innerText = 'Analyzing word-tweet relationships based on market impact';
+            const metric = document.getElementById('graph-metric-selector')?.value || 'impact';
+            window.reflexChart.renderImpactGraph(metric);
+        } else if (tab === 'stocks') {
+            networkContainer.style.display = 'block';
+            subtitle.innerText = 'Exploring company relationships and market dependencies';
+            window.reflexChart.renderStockNetwork();
+        }
+    };
+
+    const graphMetricSelector = document.getElementById('graph-metric-selector');
+    if (graphMetricSelector) {
+        graphMetricSelector.addEventListener('change', event => {
+            window.reflexChart.renderImpactGraph(event.target.value);
         });
     }
 
