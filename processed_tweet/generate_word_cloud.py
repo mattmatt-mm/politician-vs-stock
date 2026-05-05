@@ -77,6 +77,8 @@ def generate_word_cloud():
     # 3. Format JSON
     result = []
     for word, count in top_words:
+        if "http" in word:
+            continue
         related_stock = keyword_stocks.get(word, "SPY")
         result.append({
             "text": word,

@@ -207,6 +207,7 @@ document.addEventListener("DOMContentLoaded", () => {
     window.resetWordCloud = function() {
         currentMode = 'keywords';
         if (modeSelector) modeSelector.value = 'keywords';
+        if (window.switchCloudTab) window.switchCloudTab('cloud');
         renderCloud();
     };
 

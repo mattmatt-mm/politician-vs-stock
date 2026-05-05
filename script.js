@@ -71,6 +71,7 @@ class ReflexChart {
         this.highlightedTicker = null;
         this.impactGraph = new RelationshipGraph('impact-graph-container');
         this.stockNetwork = new StockNetwork('stock-network-container');
+        this.currentImpactfulWords = new Map(); // Store word node data from the graph
 
         this.sciChartSurface = null;
         this.wasmContext = null;
@@ -1437,6 +1438,7 @@ class ReflexChart {
         });
 
         nodes.push(...Array.from(wordNodes.values()));
+        this.currentImpactfulWords = wordNodes; // Cache for interaction
         return { nodes, links };
     }
 
@@ -1687,6 +1689,52 @@ class ReflexChart {
             `;
 
             card.addEventListener('click', () => {
+                const mode = document.getElementById('cloud-mode-selector')?.value;
+                
+                if (mode === 'graph' && this.currentImpactfulWords.size > 0) {
+                    // Impact Graph Interaction: Search for tweets with same impactful word
+                    const wordsInTweet = event.text.toLowerCase()
+                        .replace(/[^\w\s]/gi, '')
+                        .split(' ')
+                        .filter(w => this.currentImpactfulWords.has(w));
+                    
+                    if (wordsInTweet.length > 0) {
+                        // Pick the word with highest impact score
+                        const targetWord = wordsInTweet.reduce((a, b) => 
+                            (this.currentImpactfulWords.get(a).impactScore > this.currentImpactfulWords.get(b).impactScore) ? a : b
+                        );
+                        
+                        // Filter events by this word
+                        const allRelated = this.currentEvents.filter(e => 
+                            e.text.toLowerCase().includes(targetWord)
+                        );
+                        
+                        // Find index of current event in the filtered list
+                        const currentIndex = allRelated.findIndex(e => e.id === event.id);
+                        
+                        if (currentIndex !== -1) {
+                            // Show 5 before and 5 after
+                            const start = Math.max(0, currentIndex - 5);
+                            const end = Math.min(allRelated.length, currentIndex + 6);
+                            const windowedEvents = allRelated.slice(start, end);
+                            
+                            this.selectedEventId = event.id;
+                            this.renderFilteredStream(windowedEvents, `Keyword context: ${targetWord}`);
+                            
+                            // Highlight the specific card after re-rendering
+                            setTimeout(() => {
+                                const newCard = container.querySelector(`[data-event-id="${event.id}"]`);
+                                if (newCard) newCard.classList.add('active');
+                            }, 100);
+                            
+                            this.panToDate(event.date);
+                            this.renderActiveChart();
+                            return; // Exit early
+                        }
+                    }
+                }
+
+                // Default behavior
                 this.selectedEventId = event.id;
                 
                 // Highlight visually

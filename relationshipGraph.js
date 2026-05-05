@@ -22,6 +22,11 @@ class RelationshipGraph {
         const container = document.getElementById(this.containerId);
         if (!container) return;
 
+        // Stop previous simulation to prevent memory leaks/freezes
+        if (this.simulation) {
+            this.simulation.stop();
+        }
+
         // Clear previous
         d3.select(`#${this.containerId} svg`).remove();
 
