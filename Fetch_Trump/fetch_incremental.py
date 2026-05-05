@@ -10,6 +10,7 @@ USERNAME = "realDonaldTrump"
 BASE_URL = "https://truthsocial.com/api/v1"
 OUTPUT_FILE = "trump_truth_social_2026.csv"
 BATCH_SIZE = 100  # 每批抓取100条，防止速率限制
+MAX_TOTAL_PER_RUN = 1000  # 单次运行最多补齐1000条
 
 # 如果遇到地区限制，请设置为你的 VPN/代理 URL
 PROXY_URL = None
@@ -224,11 +225,41 @@ if __name__ == "__main__":
     
     if trump_id:
         earliest_id = get_earliest_post_id()
-        posts_data = fetch_posts_batch(trump_id, BATCH_SIZE, session, start_from_id=earliest_id)
-        
-        if posts_data:
+        current_start_id = earliest_id
+        total_saved = 0
+        batch_index = 1
+
+        while True:
+            remaining = MAX_TOTAL_PER_RUN - total_saved
+            if remaining <= 0:
+                print(f"[*] 已达到单次运行上限 {MAX_TOTAL_PER_RUN} 条，结束本次抓取")
+                break
+
+            print(f"[*] 第 {batch_index} 轮增量抓取开始...")
+            request_batch_size = min(BATCH_SIZE, remaining)
+            posts_data = fetch_posts_batch(trump_id, request_batch_size, session, start_from_id=current_start_id)
+
+            if not posts_data:
+                print("[!] 本轮没有获得新数据，停止本次抓取")
+                break
+
             append_to_csv(posts_data, OUTPUT_FILE)
-            print(f"\n[+] 本次成功补齐了 {len(posts_data)} 条数据")
+            total_saved += len(posts_data)
+            current_start_id = posts_data[-1]["id"]
+            batch_index += 1
+
+            print(f"[+] 累计本次已补齐 {total_saved} 条数据")
+
+            if total_saved >= MAX_TOTAL_PER_RUN:
+                print(f"[*] 已达到单次运行上限 {MAX_TOTAL_PER_RUN} 条，结束本次抓取")
+                break
+
+            if len(posts_data) < request_batch_size:
+                print("[*] 已经没有更多帖子可继续抓取，结束本次运行")
+                break
+
+        if total_saved:
+            print(f"\n[+] 本次总共成功补齐了 {total_saved} 条数据")
             print(f"[*] 下次可以继续运行此脚本来继续补齐历史数据")
         else:
             print("[!] 本次没有获得新数据，稍后再试")
