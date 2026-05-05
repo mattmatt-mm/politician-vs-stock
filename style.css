@@ -138,7 +138,7 @@ h2.display-header {
     border-top: none; /* overlaps with main-dashboard border */
 }
 
-.tweet-stream-container {
+.tweet-stream-container, .modal-stock-list {
     padding: 12px 40px;
     display: flex;
     flex-direction: column;
@@ -149,14 +149,14 @@ h2.display-header {
     /* Fade Out Mask */
     -webkit-mask-image: linear-gradient(to bottom, 
         transparent, 
-        black 12px, 
-        black calc(100% - 12px), 
+        black 24px, 
+        black calc(100% - 24px), 
         transparent
     );
     mask-image: linear-gradient(to bottom, 
         transparent, 
-        black 12px, 
-        black calc(100% - 12px), 
+        black 24px, 
+        black calc(100% - 24px), 
         transparent
     );
 }
@@ -843,13 +843,11 @@ h2.display-header {
 }
 
 .modal-stock-list {
-    list-style: none;
-    display: grid;
+    display: grid !important;
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     gap: 8px;
-    max-height: 160px;
-    overflow-y: auto;
-    padding-right: 8px;
+    padding: 24px 32px;
+    max-height: 240px;
 }
 
 .modal-stock-item {

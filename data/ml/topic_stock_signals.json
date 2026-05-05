@@ -1,205 +1,205 @@
 {
   "Economy & Trade": {
     "AAPL": {
-      "net_signal": 2386.9538,
-      "avg_signal": 0.1729,
-      "positive_count": 4571,
-      "negative_count": 1500,
-      "tweet_count": 13802
+      "net_signal": 2390.2281,
+      "avg_signal": 0.1715,
+      "positive_count": 4579,
+      "negative_count": 1501,
+      "tweet_count": 13937
     },
     "AMZN": {
-      "net_signal": 2386.9538,
-      "avg_signal": 0.1729,
-      "positive_count": 4571,
-      "negative_count": 1500,
-      "tweet_count": 13802
+      "net_signal": 2390.2281,
+      "avg_signal": 0.1715,
+      "positive_count": 4579,
+      "negative_count": 1501,
+      "tweet_count": 13937
     },
     "DJIA": {
-      "net_signal": 2386.9538,
-      "avg_signal": 0.1729,
-      "positive_count": 4571,
-      "negative_count": 1500,
-      "tweet_count": 13802
+      "net_signal": 2390.2281,
+      "avg_signal": 0.1715,
+      "positive_count": 4579,
+      "negative_count": 1501,
+      "tweet_count": 13937
     },
     "GOLD": {
-      "net_signal": 2386.9538,
-      "avg_signal": 0.1729,
-      "positive_count": 4571,
-      "negative_count": 1500,
-      "tweet_count": 13802
+      "net_signal": 2390.2281,
+      "avg_signal": 0.1715,
+      "positive_count": 4579,
+      "negative_count": 1501,
+      "tweet_count": 13937
     },
     "SP500": {
-      "net_signal": 2386.9538,
-      "avg_signal": 0.1729,
-      "positive_count": 4571,
-      "negative_count": 1500,
-      "tweet_count": 13802
+      "net_signal": 2390.2281,
+      "avg_signal": 0.1715,
+      "positive_count": 4579,
+      "negative_count": 1501,
+      "tweet_count": 13937
     }
   },
   "Energy & Border": {
     "CVX": {
-      "net_signal": -709.8041,
-      "avg_signal": -0.109,
-      "positive_count": 2184,
-      "negative_count": 3109,
-      "tweet_count": 6514
+      "net_signal": -716.1029,
+      "avg_signal": -0.1094,
+      "positive_count": 2192,
+      "negative_count": 3128,
+      "tweet_count": 6545
     },
     "F": {
-      "net_signal": -709.8041,
-      "avg_signal": -0.109,
-      "positive_count": 2184,
-      "negative_count": 3109,
-      "tweet_count": 6514
+      "net_signal": -716.1029,
+      "avg_signal": -0.1094,
+      "positive_count": 2192,
+      "negative_count": 3128,
+      "tweet_count": 6545
     },
     "NEE": {
-      "net_signal": -709.8041,
-      "avg_signal": -0.109,
-      "positive_count": 2184,
-      "negative_count": 3109,
-      "tweet_count": 6514
+      "net_signal": -716.1029,
+      "avg_signal": -0.1094,
+      "positive_count": 2192,
+      "negative_count": 3128,
+      "tweet_count": 6545
     },
     "TSLA": {
-      "net_signal": -709.8041,
-      "avg_signal": -0.109,
-      "positive_count": 2184,
-      "negative_count": 3109,
-      "tweet_count": 6514
+      "net_signal": -716.1029,
+      "avg_signal": -0.1094,
+      "positive_count": 2192,
+      "negative_count": 3128,
+      "tweet_count": 6545
     },
     "XOM": {
-      "net_signal": -709.8041,
-      "avg_signal": -0.109,
-      "positive_count": 2184,
-      "negative_count": 3109,
-      "tweet_count": 6514
+      "net_signal": -716.1029,
+      "avg_signal": -0.1094,
+      "positive_count": 2192,
+      "negative_count": 3128,
+      "tweet_count": 6545
     }
   },
   "Global Relations": {
     "BA": {
-      "net_signal": 1909.5672,
-      "avg_signal": 0.3532,
-      "positive_count": 3670,
-      "negative_count": 911,
-      "tweet_count": 5406
+      "net_signal": 1941.6237,
+      "avg_signal": 0.3561,
+      "positive_count": 3711,
+      "negative_count": 913,
+      "tweet_count": 5452
     },
     "CAT": {
-      "net_signal": 1909.5672,
-      "avg_signal": 0.3532,
-      "positive_count": 3670,
-      "negative_count": 911,
-      "tweet_count": 5406
+      "net_signal": 1941.6237,
+      "avg_signal": 0.3561,
+      "positive_count": 3711,
+      "negative_count": 913,
+      "tweet_count": 5452
     },
     "SP500": {
-      "net_signal": 1909.5672,
-      "avg_signal": 0.3532,
-      "positive_count": 3670,
-      "negative_count": 911,
-      "tweet_count": 5406
+      "net_signal": 1941.6237,
+      "avg_signal": 0.3561,
+      "positive_count": 3711,
+      "negative_count": 913,
+      "tweet_count": 5452
     }
   },
   "Healthcare & Misc": {
     "JNJ": {
-      "net_signal": -481.1701,
-      "avg_signal": -0.0996,
-      "positive_count": 1365,
-      "negative_count": 2019,
-      "tweet_count": 4833
+      "net_signal": -478.2614,
+      "avg_signal": -0.098,
+      "positive_count": 1371,
+      "negative_count": 2020,
+      "tweet_count": 4880
     },
     "PFE": {
-      "net_signal": -481.1701,
-      "avg_signal": -0.0996,
-      "positive_count": 1365,
-      "negative_count": 2019,
-      "tweet_count": 4833
+      "net_signal": -478.2614,
+      "avg_signal": -0.098,
+      "positive_count": 1371,
+      "negative_count": 2020,
+      "tweet_count": 4880
     },
     "UNH": {
-      "net_signal": -481.1701,
-      "avg_signal": -0.0996,
-      "positive_count": 1365,
-      "negative_count": 2019,
-      "tweet_count": 4833
+      "net_signal": -478.2614,
+      "avg_signal": -0.098,
+      "positive_count": 1371,
+      "negative_count": 2020,
+      "tweet_count": 4880
     }
   },
   "National Security": {
     "BA": {
-      "net_signal": 898.5713,
-      "avg_signal": 0.1293,
-      "positive_count": 1830,
-      "negative_count": 349,
-      "tweet_count": 6952
+      "net_signal": 909.6885,
+      "avg_signal": 0.129,
+      "positive_count": 1878,
+      "negative_count": 382,
+      "tweet_count": 7051
     },
     "LMT": {
-      "net_signal": 898.5713,
-      "avg_signal": 0.1293,
-      "positive_count": 1830,
-      "negative_count": 349,
-      "tweet_count": 6952
+      "net_signal": 909.6885,
+      "avg_signal": 0.129,
+      "positive_count": 1878,
+      "negative_count": 382,
+      "tweet_count": 7051
     },
     "PLTR": {
-      "net_signal": 898.5713,
-      "avg_signal": 0.1293,
-      "positive_count": 1830,
-      "negative_count": 349,
-      "tweet_count": 6952
+      "net_signal": 909.6885,
+      "avg_signal": 0.129,
+      "positive_count": 1878,
+      "negative_count": 382,
+      "tweet_count": 7051
     },
     "RTX": {
-      "net_signal": 898.5713,
-      "avg_signal": 0.1293,
-      "positive_count": 1830,
-      "negative_count": 349,
-      "tweet_count": 6952
+      "net_signal": 909.6885,
+      "avg_signal": 0.129,
+      "positive_count": 1878,
+      "negative_count": 382,
+      "tweet_count": 7051
     }
   },
   "Political Strategy": {
     "DJIA": {
-      "net_signal": 690.3519,
-      "avg_signal": 0.134,
-      "positive_count": 2492,
-      "negative_count": 1466,
-      "tweet_count": 5151
+      "net_signal": 682.6718,
+      "avg_signal": 0.1316,
+      "positive_count": 2504,
+      "negative_count": 1487,
+      "tweet_count": 5188
     },
     "SP500": {
-      "net_signal": 690.3519,
-      "avg_signal": 0.134,
-      "positive_count": 2492,
-      "negative_count": 1466,
-      "tweet_count": 5151
+      "net_signal": 682.6718,
+      "avg_signal": 0.1316,
+      "positive_count": 2504,
+      "negative_count": 1487,
+      "tweet_count": 5188
     }
   },
   "Technology & Crypto": {
     "BTC": {
-      "net_signal": -980.9296,
-      "avg_signal": -0.132,
-      "positive_count": 1368,
-      "negative_count": 2827,
-      "tweet_count": 7433
+      "net_signal": -972.2097,
+      "avg_signal": -0.1298,
+      "positive_count": 1397,
+      "negative_count": 2846,
+      "tweet_count": 7491
     },
     "COIN": {
-      "net_signal": -980.9296,
-      "avg_signal": -0.132,
-      "positive_count": 1368,
-      "negative_count": 2827,
-      "tweet_count": 7433
+      "net_signal": -972.2097,
+      "avg_signal": -0.1298,
+      "positive_count": 1397,
+      "negative_count": 2846,
+      "tweet_count": 7491
     },
     "MSFT": {
-      "net_signal": -980.9296,
-      "avg_signal": -0.132,
-      "positive_count": 1368,
-      "negative_count": 2827,
-      "tweet_count": 7433
+      "net_signal": -972.2097,
+      "avg_signal": -0.1298,
+      "positive_count": 1397,
+      "negative_count": 2846,
+      "tweet_count": 7491
     },
     "NVDA": {
-      "net_signal": -980.9296,
-      "avg_signal": -0.132,
-      "positive_count": 1368,
-      "negative_count": 2827,
-      "tweet_count": 7433
+      "net_signal": -972.2097,
+      "avg_signal": -0.1298,
+      "positive_count": 1397,
+      "negative_count": 2846,
+      "tweet_count": 7491
     },
     "TSLA": {
-      "net_signal": -980.9296,
-      "avg_signal": -0.132,
-      "positive_count": 1368,
-      "negative_count": 2827,
-      "tweet_count": 7433
+      "net_signal": -972.2097,
+      "avg_signal": -0.1298,
+      "positive_count": 1397,
+      "negative_count": 2846,
+      "tweet_count": 7491
     }
   }
 }

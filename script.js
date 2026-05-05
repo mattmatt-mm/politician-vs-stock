@@ -13,7 +13,11 @@ const MARKET_KEYWORDS = {
     ],
     TSLA: [
         'tsla', 'tesla', 'musk', 'ev', 'electric', 'autonomous', 'fsd'
-    ]
+    ],
+    AAPL: ['aapl', 'apple', 'iphone', 'tim cook', 'ipad', 'macbook'],
+    DE: ['de', 'john deere', 'deere', 'tractor', 'agriculture', 'farming'],
+    SNDK: ['sndk', 'sandisk', 'memory', 'flash', 'storage'],
+    PLTR: ['pltr', 'palantir', 'alex karp', 'analytics', 'cia', 'defense']
 };
 
 /** Bare ticker tokens / extras — aligned with build_word_cloud_data.py. */
@@ -78,8 +82,8 @@ const IMPACT_BAND_META = {
     'strong-positive': { label: 'Strong Positive', shortLabel: 'Strong Up' }
 };
 
-const TWEET_YEAR_MIN = 2024;
-const TWEET_YEAR_MAX = 2025;
+const TWEET_YEAR_MIN = 2019;
+const TWEET_YEAR_MAX = 2026;
 
 /** Highcharts Stock: thin top pane for tweet dots; main price OHLC/line uses the pane below. */
 const HC_TWEET_STRIP_HEIGHT_PCT = '10%';
@@ -104,6 +108,7 @@ class ReflexChart {
         this.showVerticalLines = false;
         this.selectedEventId = null;
         this.currentWindowMs = null;
+        this.highlightedTicker = null;
 
         this.sciChartSurface = null;
         this.wasmContext = null;
@@ -451,7 +456,8 @@ class ReflexChart {
                                 open: parseFloat(d.Open || d.open),
                                 high: parseFloat(d.High || d.high),
                                 low: parseFloat(d.Low || d.low),
-                                close: parseFloat(d.Close || d.close)
+                                close: parseFloat(d.Close || d.close),
+                                volume: parseFloat(d.Volume || d.volume || 0)
                             }))
                             .filter(d => {
                                 if (!this.isValidCandle(d)) return false;
@@ -626,20 +632,24 @@ class ReflexChart {
 
         const minTime = stockData[0].date.getTime();
         const maxTime = stockData[stockData.length - 1].date.getTime();
+        const keywords = MARKET_KEYWORDS[ticker] || [];
 
         const events = this.tweets
             .filter(tweet => {
                 const tweetTime = tweet.date.getTime();
-                if (tweetTime < minTime || tweetTime > maxTime) return false;
-                if (this.isSp500Ticker(ticker)) return true;
-
-                const content = tweet.text.toLowerCase();
-                return (MARKET_KEYWORDS[ticker] || []).some(keyword => content.includes(keyword));
+                return tweetTime >= minTime && tweetTime <= maxTime;
             })
-            .map(tweet => this.enrichTweet(tweet, ticker, stockData, benchmarkData))
+            .map(tweet => {
+                const content = tweet.text.toLowerCase();
+                const isRelevant = this.isSp500Ticker(ticker) || keywords.some(k => content.includes(k));
+                return {
+                    ...this.enrichTweet(tweet, ticker, stockData, benchmarkData),
+                    isRelevant
+                };
+            })
             .sort((a, b) => a.date - b.date);
 
-        return events.slice(-500); // Take the latest 500 for the selected year
+        return events.slice(-1000);
     }
 
     enrichTweet(tweet, ticker, stockData, benchmarkData = []) {
@@ -1077,13 +1087,16 @@ class ReflexChart {
             return;
         }
 
-        const candleData = data.map(d => [
+        const hasVolume = data[0]?.volume !== undefined && data.some(d => d.volume > 0);
+        const rawCandleData = data.map(d => [
             d.date.getTime(),
             d.open,
             d.high,
             d.low,
             d.close
         ]);
+        const volumeData = hasVolume ? data.map(d => [d.date.getTime(), d.volume || 0]) : [];
+
         const visibleEvents = this.eventsInDataRange(events, data);
         const defaultWindow = this.defaultWindowMs(data);
         const max = data[data.length - 1].date.getTime();
@@ -1095,6 +1108,49 @@ class ReflexChart {
         }
 
         const reflex = this;
+
+        // Layout: tweet strip (0-10%), price (10-72%), volume (74-94%) when available
+        const priceHeight = hasVolume ? '62%' : HC_PRICE_Y_AXIS_HEIGHT_PCT;
+        const volumeTop = '74%';
+        const volumeHeight = '20%';
+
+        const yAxes = [
+            {
+                opposite: true,
+                top: HC_PRICE_Y_AXIS_TOP_PCT,
+                height: priceHeight,
+                resize: { enabled: false },
+                gridLineColor: '#F4F4F5',
+                labels: { style: { color: '#52525B' } }
+            },
+            {
+                opposite: true,
+                top: '0%',
+                height: HC_TWEET_STRIP_HEIGHT_PCT,
+                offset: 0,
+                min: 0,
+                max: 1,
+                visible: false,
+                gridLineWidth: 0,
+                minorGridLineWidth: 0,
+                labels: { enabled: false },
+                title: { text: null },
+                tickLength: 0,
+                lineWidth: 0
+            }
+        ];
+        if (hasVolume) {
+            yAxes.push({
+                opposite: true,
+                top: volumeTop,
+                height: volumeHeight,
+                offset: 0,
+                lineWidth: 1,
+                gridLineColor: '#F4F4F5',
+                labels: { align: 'right', x: -3, style: { color: '#A1A1AA', fontSize: '9px' } },
+                title: { text: null }
+            });
+        }
 
         this.highChart = Highcharts.stockChart(this.highchartsContainerId, {
             chart: {
@@ -1131,9 +1187,16 @@ class ReflexChart {
                     return this.showVerticalLines || (this.selectedEventId && event.id === this.selectedEventId);
                 }).map(event => {
                     const isSelected = this.selectedEventId && event.id === this.selectedEventId;
+                    let isHoverRelevant = false;
+                    if (this.highlightedTicker) {
+                        const kws = MARKET_KEYWORDS[this.highlightedTicker] || [this.highlightedTicker.toLowerCase()];
+                        isHoverRelevant = kws.some(k => event.text.toLowerCase().includes(k));
+                    }
+                    const alpha = (isSelected || (this.highlightedTicker && isHoverRelevant)) ? ''
+                        : (this.highlightedTicker ? '80' : (event.isRelevant ? '' : '80'));
                     return {
                         value: event.date.getTime(),
-                        color: SENTIMENT_META[event.sentiment.direction].color + (isSelected ? '' : '33'),
+                        color: SENTIMENT_META[event.sentiment.direction].color + (isSelected ? '' : alpha || '33'),
                         width: isSelected ? 2 : 1,
                         zIndex: isSelected ? 5 : 1
                     };
@@ -1155,31 +1218,7 @@ class ReflexChart {
                     }
                 }
             },
-            yAxis: [
-                {
-                    opposite: true,
-                    top: HC_PRICE_Y_AXIS_TOP_PCT,
-                    height: HC_PRICE_Y_AXIS_HEIGHT_PCT,
-                    resize: { enabled: false },
-                    gridLineColor: '#F4F4F5',
-                    labels: { style: { color: '#52525B' } }
-                },
-                {
-                    opposite: true,
-                    top: '0%',
-                    height: HC_TWEET_STRIP_HEIGHT_PCT,
-                    offset: 0,
-                    min: 0,
-                    max: 1,
-                    visible: false,
-                    gridLineWidth: 0,
-                    minorGridLineWidth: 0,
-                    labels: { enabled: false },
-                    title: { text: null },
-                    tickLength: 0,
-                    lineWidth: 0
-                }
-            ],
+            yAxis: yAxes,
             tooltip: {
                 split: false,
                 shared: true,
@@ -1190,6 +1229,9 @@ class ReflexChart {
                     if (!point) return false;
                     if (point.series.options.id === 'tweet-markers') {
                         return point.tooltipHtml || false;
+                    }
+                    if (point.series.options.id === `${ticker}-volume`) {
+                        return `<strong>${Highcharts.dateFormat('%b %e, %Y %H:%M', point.x)}</strong><br>Volume: ${point.y?.toLocaleString()}`;
                     }
                     return `
                         <strong>${Highcharts.dateFormat('%b %e, %Y %H:%M', point.x)}</strong><br>
@@ -1209,6 +1251,9 @@ class ReflexChart {
                     upColor: '#10B981',
                     lineColor: '#E11D48',
                     upLineColor: '#10B981'
+                },
+                column: {
+                    borderColor: 'transparent'
                 },
                 scatter: {
                     stickyTracking: true,
@@ -1235,8 +1280,17 @@ class ReflexChart {
                     id: `${ticker}-candles`,
                     name: ticker,
                     yAxis: 0,
-                    data: candleData
+                    data: rawCandleData
                 },
+                ...(hasVolume ? [{
+                    type: 'column',
+                    id: `${ticker}-volume`,
+                    name: 'Volume',
+                    data: volumeData,
+                    yAxis: 2,
+                    color: '#D4D4D8',
+                    borderColor: 'transparent'
+                }] : []),
                 ...this.highchartsTweetScatterSeries(visibleEvents)
             ]
         });
@@ -1255,12 +1309,15 @@ class ReflexChart {
             point.date.getTime(),
             point.break ? null : point.close
         ]);
+        const hasVolume = data[0]?.volume !== undefined && data.some(d => d.volume > 0);
+        const volumeData = hasVolume ? data.map(p => [p.date.getTime(), p.volume || 0]) : [];
 
         if (this.highChart) {
             this.highChart.destroy();
         }
 
         const reflex = this;
+        const priceHeight = hasVolume ? '62%' : HC_PRICE_Y_AXIS_HEIGHT_PCT;
 
         this.highChart = Highcharts.stockChart(this.highchartsContainerId, {
             chart: {
@@ -1297,9 +1354,16 @@ class ReflexChart {
                     return this.showVerticalLines || (this.selectedEventId && event.id === this.selectedEventId);
                 }).map(event => {
                     const isSelected = this.selectedEventId && event.id === this.selectedEventId;
+                    let isHoverRelevant = false;
+                    if (this.highlightedTicker) {
+                        const kws = MARKET_KEYWORDS[this.highlightedTicker] || [this.highlightedTicker.toLowerCase()];
+                        isHoverRelevant = kws.some(k => event.text.toLowerCase().includes(k));
+                    }
+                    const alpha = (isSelected || (this.highlightedTicker && isHoverRelevant)) ? ''
+                        : (this.highlightedTicker ? '80' : (event.isRelevant ? '' : '80'));
                     return {
                         value: event.date.getTime(),
-                        color: SENTIMENT_META[event.sentiment.direction].color + (isSelected ? '' : '33'),
+                        color: SENTIMENT_META[event.sentiment.direction].color + (isSelected ? '' : alpha || '33'),
                         width: isSelected ? 2 : 1,
                         zIndex: isSelected ? 5 : 1
                     };
@@ -1325,7 +1389,7 @@ class ReflexChart {
                 {
                     opposite: true,
                     top: HC_PRICE_Y_AXIS_TOP_PCT,
-                    height: HC_PRICE_Y_AXIS_HEIGHT_PCT,
+                    height: priceHeight,
                     resize: { enabled: false },
                     gridLineColor: '#F4F4F5',
                     labels: { style: { color: '#52525B' } }
@@ -1344,7 +1408,17 @@ class ReflexChart {
                     title: { text: null },
                     tickLength: 0,
                     lineWidth: 0
-                }
+                },
+                ...(hasVolume ? [{
+                    opposite: true,
+                    top: '74%',
+                    height: '20%',
+                    offset: 0,
+                    lineWidth: 1,
+                    gridLineColor: '#F4F4F5',
+                    labels: { align: 'right', x: -3, style: { color: '#A1A1AA', fontSize: '9px' } },
+                    title: { text: null }
+                }] : [])
             ],
             tooltip: {
                 split: false,
@@ -1356,6 +1430,9 @@ class ReflexChart {
                     if (!point) return false;
                     if (point.series.options.id === 'tweet-markers') {
                         return point.tooltipHtml || false;
+                    }
+                    if (point.series.options.id === `${ticker}-volume`) {
+                        return `<strong>${Highcharts.dateFormat('%b %e, %Y', point.x)}</strong><br>Volume: ${point.y?.toLocaleString()}`;
                     }
                     return `
                         <strong>${Highcharts.dateFormat('%b %e, %Y', point.x)}</strong><br>
@@ -1370,6 +1447,7 @@ class ReflexChart {
                     dataGrouping: { enabled: false },
                     states: { inactive: { opacity: 1 } }
                 },
+                column: { borderColor: 'transparent' },
                 scatter: {
                     stickyTracking: true,
                     marker: {
@@ -1400,12 +1478,31 @@ class ReflexChart {
                     lineWidth: 2,
                     marker: { enabled: false }
                 },
+                ...(hasVolume ? [{
+                    type: 'column',
+                    id: `${ticker}-volume`,
+                    name: 'Volume',
+                    data: volumeData,
+                    yAxis: 2,
+                    color: '#D4D4D8',
+                    borderColor: 'transparent'
+                }] : []),
                 ...this.highchartsTweetScatterSeries(visibleEvents)
             ]
         });
 
         this.currentWindowMs = this.highChart.xAxis[0].max - this.highChart.xAxis[0].min;
         this.reflowActiveChart();
+    }
+
+    highlightTicker(ticker) {
+        this.highlightedTicker = ticker;
+        this.renderActiveChart();
+    }
+
+    clearTickerHighlight() {
+        this.highlightedTicker = null;
+        this.renderActiveChart();
     }
 
     tweetTooltipHtml(event) {
@@ -1436,6 +1533,13 @@ class ReflexChart {
                 data: events.map(event => {
                     const meta = SENTIMENT_META[event.sentiment.direction];
                     const isSel = reflex.selectedEventId && event.id === reflex.selectedEventId;
+                    let isHoverRelevant = false;
+                    if (reflex.highlightedTicker) {
+                        const kws = MARKET_KEYWORDS[reflex.highlightedTicker] || [reflex.highlightedTicker.toLowerCase()];
+                        isHoverRelevant = kws.some(k => event.text.toLowerCase().includes(k));
+                    }
+                    const alpha = (isSel || (reflex.highlightedTicker && isHoverRelevant)) ? ''
+                        : (reflex.highlightedTicker ? '40' : (event.isRelevant === false ? '40' : '80'));
                     return {
                         x: event.date.getTime(),
                         y: 0.5,
@@ -1443,8 +1547,8 @@ class ReflexChart {
                         tooltipHtml: reflex.tweetTooltipHtml(event),
                         marker: {
                             symbol: 'circle',
-                            radius: 2.5,
-                            fillColor: isSel ? meta.color : meta.color + '80',
+                            radius: isSel ? 3.5 : 2.5,
+                            fillColor: meta.color + (isSel ? '' : alpha),
                             lineWidth: 0
                         }
                     };
@@ -1803,6 +1907,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 selectTicker(s.ticker, s.name);
                 closeModal();
             };
+            li.onmouseenter = () => window.reflexChart?.highlightTicker(s.ticker);
+            li.onmouseleave = () => window.reflexChart?.clearTickerHighlight();
             modalStockList.appendChild(li);
         });
     };
@@ -1840,6 +1946,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 e.preventDefault(); // Prevent input from blurring and closing the list
                 selectTicker(s.ticker, s.name);
             };
+            li.onmouseenter = () => window.reflexChart?.highlightTicker(s.ticker);
+            li.onmouseleave = () => window.reflexChart?.clearTickerHighlight();
             list.appendChild(li);
         });
 

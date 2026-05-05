@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## [In Progress] Apply e62bbae: Volume + Ticker Hover Highlighting
+
+### Goal
+Port commit e62bbae's volume pane, ticker hover highlighting, `isRelevant` tweet filtering, and MARKET_KEYWORDS expansion onto current `main`. Replace `data/ml/trump_tweets_topics.csv` with merged dataset (+520 Truth Social 2026 rows).
+
+### Changes
+
+| Date | File | Change | Status |
+|------|------|--------|--------|
+| 2026-05-05 | `data/ml/trump_tweets_topics.csv` | Merged 520 new Truth Social 2026 rows from commit CSV; computed missing columns | ✅ Done |
+| 2026-05-05 | `data/ml/topic_stock_signals.json` | Regenerated with full 53068-row dataset | ✅ Done |
+| 2026-05-05 | `script.js` | MARKET_KEYWORDS + TWEET_YEAR_MIN/MAX + `highlightedTicker` + volume + `isRelevant` + `highlightTicker()` | ✅ Done |
+| 2026-05-05 | `script.js` | renderModalStockList hover wiring | ✅ Done |
+| 2026-05-05 | `style.css` | Modal list polish | ✅ Done |
+
+---
+
 ## [Completed] Search Cloud: Processed Tweet Source, Dynamic Keywords & Mode Fixes
 
 ### Goal

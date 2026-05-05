@@ -34,13 +34,14 @@ This is a static SPA served by an Express.js backend. The frontend loads preproc
 2. Stock OHLCV data is fetched on demand via `/api/fetch-stock?ticker=X`, which shells out to `fetch_stock/fetch_stock.py` and caches the result as `{TICKER}.csv` in the `fetch_stock/` directory
 3. The frontend matches tweet timestamps to ±30-minute OHLCV windows to compute abnormal returns
 
-**Frontend (`script.js` ~1700 LOC):** A single `ReflexChart` class manages all state. Key methods:
+**Frontend (`script.js` ~1980 LOC):** A single `ReflexChart` class manages all state. Key methods:
 - `loadTweets()` – reads the processed CSV; caches topic definitions in `window.TOPIC_DEFINITIONS`
-- `loadStockData(ticker)` – tries multiple file locations: root CSVs, `local_data/`, `fetch_stock/`
+- `loadStockData(ticker)` – tries path order: `local_data/{ticker}_60min.csv` → `fetch_stock/{ticker}.csv` → root CSVs → mock library
 - `prepareTweetEvents()` – joins tweets to OHLCV windows; filters to tweets within stock data range
 - `calculatePostMove()` – core market impact logic (see below)
-- `renderActiveChart()` – dispatches to Highcharts Stock or SciChart.js (dual-engine; Highcharts is primary)
+- `renderActiveChart()` – dispatches to Highcharts Stock or SciChart.js (dual-engine; Highcharts is primary); SciChart init is async (`sciChartInitPromise`) and must resolve before engine switching works
 - `populateTweetStream()` – renders tweet sidebar
+- `afterSetExtremes` handlers on both Highcharts axes sync the word cloud and term-frequency bar to the visible x-range on every pan/zoom
 
 **Word cloud (`wordCloud.js`):** D3 layout with modes — **keyword** counts from `ReflexChart.computeKeywordCloudData` (same events and Highcharts x-range as the term-frequency bar; `updateKeywordCloud`), **stocks** from `/api/stock-mentions`, **topics** from `window.TOPIC_DEFINITIONS`, **term frequency** from `computeTermFrequency` plus optional `/api/term-frequency` fallback on load.
 
@@ -61,6 +62,7 @@ This is a static SPA served by an Express.js backend. The frontend loads preproc
 - **Python as subprocess:** Stock fetching is not a Node.js service — `server.js` spawns `.venv/bin/python` (falling back to `python3`) and parses the `SUCCESS_FILENAME:{filename}` line from stdout.
 - **No bundler:** All JS is loaded via CDN (D3 v7, d3-cloud, Highcharts, SciChart, Lucide). The app must be served over HTTP (not `file://`) for CDN resources to load.
 - **Sentiment pipeline is additive:** `add_sentiment.py` writes 5 new sentiment columns; `extract_topics.py` further appends topic columns. Each script reads the previous output.
+- **`tweet_tokenizer.py`** is a shared module imported by `build_word_cloud_data.py` and `compute_term_frequency.py` — it defines `STOP_WORDS`, `clean_and_tokenize()`, and `filter_tokens()`. Its stopword list is intentionally aligned with the equivalent filtering in `script.js`.
 
 ## Market Impact Calculation (`calculatePostMove`)
 
@@ -81,6 +83,8 @@ This is the most complex logic in the codebase:
 - **TOPIC_STOCK_MAP** in `server.js`: maps LDA topic names to tickers for the semantic mention scoring in `/api/stock-mentions` — hardcoded alongside the 10% scoring weight.
 - **yfinance intraday limits:** `fetch_stock.py` forces 1h interval. yfinance allows max 730 days for hourly data. If the file already exists, new data is merged and deduplicated.
 - **LDA config:** 8 topics with only 10 max iterations — intentionally fast but potentially underfitted. Topic names and colors are fixed in `extract_topics.py` and regenerated in `topic_definitions.json`.
+- **`dominant_topic_prob` always 1.0:** `build_topic_stock_signals.py` sets this column to 1.0 for all rows — LDA per-document probabilities are not stored in the pipeline yet.
+- **BTC in keyword cloud:** `classifyKeywordForCloud()` maps BTC to `SP500` internally (not its own ticker).
 - **Keyword cloud:** Computed in-browser from the same tweet-event sets as the term-frequency bar. Optional: `build_word_cloud_data.py` → `data/ml/word_cloud_keywords.json` (not used by the live keyword mode).
 - **`stock_data_mock.json`:** 68KB fallback OHLC dataset used for demos when real data is unavailable.
 - **Line breaks for market gaps:** `withLineBreaks()` inserts NaN points when time gaps exceed 3 days, preventing lines from spanning weekends/holidays.
