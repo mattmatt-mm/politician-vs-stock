@@ -1,0 +1,602 @@
+[
+  {
+    "text": "great",
+    "size": 6943,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "people",
+    "size": 4053,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "america",
+    "size": 3796,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "image",
+    "size": 3557,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "country",
+    "size": 3536,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "biden",
+    "size": 3440,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "new",
+    "size": 3115,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "election",
+    "size": 2915,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "thank",
+    "size": 2846,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "never",
+    "size": 2842,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "joe",
+    "size": 2522,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "american",
+    "size": 2455,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "get",
+    "size": 2430,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "would",
+    "size": 2389,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "democrats",
+    "size": 2352,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "make",
+    "size": 2329,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "one",
+    "size": 2320,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "states",
+    "size": 2242,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "big",
+    "size": 2218,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "video",
+    "size": 2215,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "like",
+    "size": 2097,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "news",
+    "size": 2084,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "state",
+    "size": 2043,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "border",
+    "size": 2016,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "united",
+    "size": 1956,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "many",
+    "size": 1922,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "fake",
+    "size": 1862,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "going",
+    "size": 1851,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "time",
+    "size": 1837,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "even",
+    "size": 1834,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "years",
+    "size": 1799,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "first",
+    "size": 1757,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "vote",
+    "size": 1695,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "total",
+    "size": 1663,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "want",
+    "size": 1585,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "today",
+    "size": 1525,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "house",
+    "size": 1480,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "back",
+    "size": 1479,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "history",
+    "size": 1462,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "dont",
+    "size": 1436,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "left",
+    "size": 1435,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "complete",
+    "size": 1427,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "republican",
+    "size": 1420,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "much",
+    "size": 1417,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "job",
+    "size": 1387,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "must",
+    "size": 1373,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "endorsement",
+    "size": 1357,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "case",
+    "size": 1342,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "done",
+    "size": 1327,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "crime",
+    "size": 1309,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "law",
+    "size": 1297,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "nothing",
+    "size": 1296,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "day",
+    "size": 1287,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "good",
+    "size": 1272,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "also",
+    "size": 1269,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "world",
+    "size": 1261,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "always",
+    "size": 1253,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "crooked",
+    "size": 1237,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "made",
+    "size": 1233,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "ever",
+    "size": 1233,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "let",
+    "size": 1218,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "way",
+    "size": 1210,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "radical",
+    "size": 1200,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "win",
+    "size": 1198,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "political",
+    "size": 1197,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "second",
+    "size": 1158,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "see",
+    "size": 1157,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "york",
+    "size": 1155,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "secure",
+    "size": 1125,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "know",
+    "size": 1124,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "support",
+    "size": 1116,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "economy",
+    "size": 1106,
+    "category": "Stock",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "right",
+    "size": 1090,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "said",
+    "size": 1089,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "media",
+    "size": 1061,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "judge",
+    "size": 1042,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "democrat",
+    "size": 1038,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "china",
+    "size": 1032,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "stop",
+    "size": 1028,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "incredible",
+    "size": 1020,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "hard",
+    "size": 1017,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "working",
+    "size": 1016,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "bad",
+    "size": 985,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "presidential",
+    "size": 968,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "military",
+    "size": 962,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "got",
+    "size": 942,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "russia",
+    "size": 929,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "court",
+    "size": 929,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "energy",
+    "size": 928,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "usa",
+    "size": 922,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "corrupt",
+    "size": 920,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "congress",
+    "size": 914,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "party",
+    "size": 908,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "work",
+    "size": 898,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "kamala",
+    "size": 898,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "campaign",
+    "size": 893,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "republicans",
+    "size": 889,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "every",
+    "size": 885,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "take",
+    "size": 883,
+    "category": "General",
+    "related_stock": "SPY"
+  },
+  {
+    "text": "congressman",
+    "size": 874,
+    "category": "General",
+    "related_stock": "SPY"
+  }
+]
