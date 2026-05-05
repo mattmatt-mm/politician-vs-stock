@@ -1,121 +1,121 @@
 {
     "Economy & Trade": {
         "keywords": [
-            "great",
-            "america",
-            "make",
-            "country",
-            "people",
-            "big",
-            "back",
-            "good",
-            "win",
-            "many"
+            "trump",
+            "president",
+            "donald",
+            "live",
+            "video",
+            "quicktime",
+            "biden",
+            "vote",
+            "join",
+            "see"
         ],
         "color": "#E11D48"
     },
     "National Security": {
         "keywords": [
             "image",
-            "vote",
-            "border",
-            "pm",
-            "great",
-            "live",
-            "tonight",
-            "join",
-            "state",
-            "big"
+            "states",
+            "united",
+            "president",
+            "us",
+            "law",
+            "national",
+            "federal",
+            "trump",
+            "new"
         ],
         "color": "#D97706"
     },
     "Media & Truth": {
         "keywords": [
-            "total",
-            "complete",
-            "endorsement",
-            "second",
-            "secure",
             "great",
-            "border",
-            "congressman",
-            "amendment",
-            "congressional"
+            "thank",
+            "america",
+            "big",
+            "make",
+            "election",
+            "win",
+            "vote",
+            "president",
+            "congratulations"
         ],
         "color": "#059669"
     },
     "Energy & Border": {
         "keywords": [
-            "news",
-            "biden",
-            "fake",
-            "joe",
-            "trump",
-            "media",
+            "country",
             "president",
-            "left",
-            "like",
-            "crooked"
+            "people",
+            "america",
+            "great",
+            "biden",
+            "joe",
+            "states",
+            "united",
+            "us"
         ],
         "color": "#2563EB"
     },
     "Technology & Crypto": {
         "keywords": [
-            "video",
-            "election",
-            "democrats",
-            "fbi",
-            "russia",
-            "country",
-            "people",
-            "hoax",
-            "never",
-            "quicktime"
+            "complete",
+            "total",
+            "endorsement",
+            "secure",
+            "great",
+            "second",
+            "border",
+            "always",
+            "american",
+            "congressman"
         ],
         "color": "#7C3AED"
     },
     "Global Relations": {
         "keywords": [
-            "thank",
-            "president",
-            "united",
-            "states",
-            "great",
-            "american",
-            "us",
-            "america",
-            "war",
-            "law"
+            "fake",
+            "election",
+            "news",
+            "trump",
+            "even",
+            "never",
+            "case",
+            "democrats",
+            "nothing",
+            "biden"
         ],
         "color": "#4B5563"
     },
     "Political Strategy": {
         "keywords": [
-            "trump",
-            "president",
-            "us",
-            "years",
+            "video",
             "new",
-            "jobs",
-            "states",
-            "history",
-            "economy",
-            "ever"
+            "trump",
+            "book",
+            "poll",
+            "republican",
+            "breitbartcompolitics",
+            "president",
+            "fbi",
+            "york"
         ],
         "color": "#10B981"
     },
     "Healthcare & Misc": {
         "keywords": [
-            "trump",
-            "president",
-            "case",
-            "judge",
-            "new",
-            "york",
-            "election",
-            "biden",
-            "political",
-            "donald"
+            "state",
+            "texas",
+            "senate",
+            "house",
+            "vote",
+            "mike",
+            "republicans",
+            "republican",
+            "democrats",
+            "th"
         ],
         "color": "#F43F5E"
     }
