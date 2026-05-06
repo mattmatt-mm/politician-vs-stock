@@ -451,7 +451,10 @@ class ReflexChart {
 
         // Add discovered paths from the server
         if (window.AVAILABLE_STOCKS) {
-            const discovered = window.AVAILABLE_STOCKS.filter(s => s.ticker === tickerSymbol).map(s => s.path);
+            const discovered = window.AVAILABLE_STOCKS
+                .filter(s => s.ticker === tickerSymbol)
+                .map(s => s.path)
+                .filter(path => typeof path === 'string' && path.length > 0);
             possiblePaths.unshift(...discovered);
         }
 
